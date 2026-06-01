@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>codemaru — developer summary cards</title>
+    <meta
+      name="description"
+      content="Render your public developer activity and algorithm-training stats as an embeddable GitHub README card."
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body data-action-available="{{ 'true' if action_available else 'false' }}">
+    <main class="container">
+      <header class="header">
+        <h1>codemaru</h1>
+        <p>Summarize your developer activity as an embeddable GitHub README card.</p>
+      </header>
+
+      <div class="layout">
+        <!-- method=get gives a no-JS fallback: submitting reloads with a live preview. -->
+        <form class="panel" method="get" action="/" id="generator-form">
+          <div class="field">
+            <label for="github">GitHub username (required)</label>
+            <input id="github" name="github" value="{{ values.github }}" placeholder="octocat" />
+          </div>
+          <div class="row">
+            <div class="field">
+              <label for="boj">BOJ / solved.ac</label>
+              <input id="boj" name="boj" value="{{ values.boj }}" placeholder="optional" />
+            </div>
+            <div class="field">
+              <label for="leetcode">LeetCode</label>
+              <input
+                id="leetcode"
+                name="leetcode"
+                value="{{ values.leetcode }}"
+                placeholder="optional"
+              />
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label for="theme">Theme</label>
+              <select id="theme" name="theme">
+                {% for t in themes %}
+                <option value="{{ t }}" {% if t == values.theme %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field">
+              <label for="compact">Layout</label>
+              <select id="compact" name="compact">
+                <option value="false" {% if not values.compact %}selected{% endif %}>default</option>
+                <option value="true" {% if values.compact %}selected{% endif %}>compact</option>
+              </select>
+            </div>
+          </div>
+          <noscript>
+            <button type="submit" class="copy">Update preview</button>
+          </noscript>
+          {% if error %}<div class="error" id="error">{{ error }}</div>{% endif %}
+        </form>
+
+        <div>
+          <div class="preview-head">
+            <h3>Preview</h3>
+            <button type="button" class="copy" id="refresh" title="Re-fetch the card, bypassing any browser/CDN cache">↻ Refresh</button>
+          </div>
+          <div class="preview">
+            {% if preview_url %}
+            <img id="preview-img" src="{{ preview_url }}" alt="codemaru card preview" />
+            {% else %}
+            <span class="muted" id="preview-placeholder">Fix the highlighted field to preview</span>
+            {% endif %}
+          </div>
+
+          {% if snippets %}
+          <div class="snippet">
+            <div class="snippet-head"><h3>Markdown</h3><button type="button" class="copy" data-copy="markdown">Copy</button></div>
+            <pre id="snippet-markdown">{{ snippets.markdown }}</pre>
+          </div>
+          <div class="snippet">
+            <div class="snippet-head"><h3>HTML &lt;picture&gt;</h3><button type="button" class="copy" data-copy="picture">Copy</button></div>
+            <pre id="snippet-picture">{{ snippets.picture }}</pre>
+          </div>
+          {% if action_available %}
+          <div class="snippet">
+            <div class="snippet-head"><h3>GitHub Action</h3><button type="button" class="copy" data-copy="action">Copy</button></div>
+            <pre id="snippet-action">{{ snippets.action }}</pre>
+          </div>
+          {% else %}
+          <div class="snippet snippet-disabled">
+            <div class="snippet-head"><h3>GitHub Action</h3><span class="badge">coming soon</span></div>
+            <pre id="snippet-action">{{ snippets.action }}</pre>
+          </div>
+          {% endif %}
+          {% endif %}
+
+          <p class="note">
+            Fixture preview — real GitHub / solved.ac / LeetCode data lands in the next release.
+            Scores summarize public activity, not an absolute skill rating.
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <script src="/static/generator.js" defer></script>
+  </body>
+</html>
