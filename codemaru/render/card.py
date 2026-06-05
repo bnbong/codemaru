@@ -241,13 +241,20 @@ def _metrics_row(summary: CodemaruSummary, layout: _Layout, theme: Theme) -> str
 
 def _footer(summary: CodemaruSummary, layout: _Layout, theme: Theme) -> str:
     date = summary.updated_at.date().isoformat()
-    stale = summary.overall_status.value != "ok"
+    # Prefer the more specific "stale data" (a last-good fallback) over the
+    # generic "partial data" (one platform degraded this fetch).
+    if summary.stale:
+        flag = "stale data"
+    elif summary.overall_status.value != "ok":
+        flag = "partial data"
+    else:
+        flag = ""
     x = layout.panel_width + 16
     left = f"scoreVersion {safe_text(summary.scores.score_version, 10)} · {date}"
     badge = (
         f'<text x="{layout.width - 14}" y="{fmt_num(layout.footer_y)}" text-anchor="end" '
-        f'fill="{theme.muted}" font-size="9" font-weight="500" font-family="{CARD_SANS}">partial data</text>'
-        if stale
+        f'fill="{theme.muted}" font-size="9" font-weight="500" font-family="{CARD_SANS}">{flag}</text>'
+        if flag
         else ""
     )
     return (

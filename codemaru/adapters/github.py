@@ -121,11 +121,18 @@ def build_github_snapshot(
     followers: int,
     contrib: dict[str, Any],
     fetched_at: datetime,
+    partial: bool = False,
 ) -> GitHubSnapshot:
-    """Assemble a GitHubSnapshot from aggregated repo data + contributions."""
+    """Assemble a GitHubSnapshot from aggregated repo data + contributions.
+
+    ``partial=True`` means not all repository pages were summed (a later page
+    failed, or the page cap was hit), so stars/forks/language_count undercount
+    the full set — mark it ``partial`` rather than silently distorting the score.
+    """
     active_days, longest_streak = _active_days_and_streak(contrib.get("contributionCalendar", {}))
     return GitHubSnapshot(
-        status=PlatformStatus.OK,
+        status=PlatformStatus.PARTIAL if partial else PlatformStatus.OK,
+        note="repository stats truncated (too many repos)" if partial else None,
         fetched_at=fetched_at,
         login=login,
         public_repos=repos_total,
@@ -207,6 +214,10 @@ async def fetch_github(
             page_info = nxt_repos.get("pageInfo", {})
             pages += 1
 
+        # Still more pages than we fetched (a later page failed, or we hit
+        # MAX_REPO_PAGES) → repo aggregates are incomplete.
+        truncated = bool(page_info.get("hasNextPage"))
+
         return build_github_snapshot(
             login=first.get("login", login),
             repos_total=repos_total,
@@ -216,6 +227,7 @@ async def fetch_github(
             followers=followers,
             contrib=contrib,
             fetched_at=fetched_at,
+            partial=truncated,
         )
     except Exception:  # noqa: BLE001 - degrade gracefully on any network/schema error
         return _unavailable(login, "request failed", fetched_at)

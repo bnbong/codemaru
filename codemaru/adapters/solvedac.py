@@ -8,8 +8,8 @@ solved.ac sits behind Cloudflare, which rejects plain-Python TLS fingerprints
 (``httpx``/``curl`` get a 403 "Just a moment…" challenge regardless of headers or
 IP). So this adapter uses ``curl_cffi`` with Chrome impersonation — a real
 browser TLS/JA3 fingerprint — to read the public API. If the profile loads but
-the distribution call fails, the snapshot is still ``ok`` with a zeroed
-distribution; any other failure degrades to ``unavailable``.
+the distribution call fails, the snapshot is marked ``partial`` (profile metrics
+kept, distribution zeroed); any other failure degrades to ``unavailable``.
 """
 
 from __future__ import annotations

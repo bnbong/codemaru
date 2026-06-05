@@ -33,5 +33,8 @@ class CodemaruSummary(BaseModel):
     # Worst status across attempted platforms — drives the stale/degraded UI.
     overall_status: PlatformStatus = Field(serialization_alias="overallStatus")
     updated_at: datetime = Field(serialization_alias="updatedAt")
+    # True when this is a last-successful summary served during a live outage
+    # (the data is genuine but older than `updated_at` implies it is fresh).
+    stale: bool = False
 
     model_config = {"populate_by_name": True}

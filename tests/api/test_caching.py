@@ -70,9 +70,13 @@ async def test_stale_fallback_keeps_last_good_through_outage(
     monkeypatch.setattr(service, "fetch_solvedac", dead_solvedac)
 
     second = await service.get_summary(profile)
-    # The last good summary is served instead of a suddenly-degraded card.
+    # The last good summary is served instead of a suddenly-degraded card, but
+    # flagged stale so JSON consumers and the card footer can tell.
     assert second.overall_status is PlatformStatus.OK
-    assert second == first
+    assert first.stale is False
+    assert second.stale is True
+    assert second.scores == first.scores
+    assert second.snapshots == first.snapshots
 
 
 async def test_degraded_without_prior_success_is_partial(
