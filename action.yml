@@ -1,0 +1,71 @@
+name: "codemaru card"
+description: "Generate a codemaru developer summary card SVG and write it into your repository."
+author: "bnbong"
+branding:
+  icon: "award"
+  color: "purple"
+
+inputs:
+  github:
+    description: "GitHub username to summarize."
+    required: true
+  boj:
+    description: "solved.ac / BOJ handle (optional)."
+    required: false
+    default: ""
+  leetcode:
+    description: "LeetCode handle (optional)."
+    required: false
+    default: ""
+  theme:
+    description: "Card theme: default | dark | transparent."
+    required: false
+    default: "default"
+  compact:
+    description: "Use the compact (tier-panel-only) layout."
+    required: false
+    default: "false"
+  out:
+    description: "Output path for the generated SVG."
+    required: false
+    default: "profile/codemaru.svg"
+  github-token:
+    description: "Token used to read public GitHub data. Defaults to the workflow token."
+    required: false
+    default: ${{ github.token }}
+  python-version:
+    description: "Python version used to run the generator."
+    required: false
+    default: "3.12"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install codemaru
+      shell: bash
+      run: pip install --quiet "${{ github.action_path }}"
+
+    - name: Generate card
+      shell: bash
+      # Inputs are passed via env (not interpolated into the script) to avoid
+      # shell injection from untrusted handle values.
+      env:
+        FIXTURE_MODE: "false"
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        IN_GITHUB: ${{ inputs.github }}
+        IN_BOJ: ${{ inputs.boj }}
+        IN_LEETCODE: ${{ inputs.leetcode }}
+        IN_THEME: ${{ inputs.theme }}
+        IN_COMPACT: ${{ inputs.compact }}
+        IN_OUT: ${{ inputs.out }}
+      run: |
+        args=(--github "$IN_GITHUB" --theme "$IN_THEME" --out "$IN_OUT")
+        [ -n "$IN_BOJ" ] && args+=(--boj "$IN_BOJ")
+        [ -n "$IN_LEETCODE" ] && args+=(--leetcode "$IN_LEETCODE")
+        [ "$IN_COMPACT" = "true" ] && args+=(--compact)
+        codemaru generate "${args[@]}"
