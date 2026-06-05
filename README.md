@@ -86,9 +86,11 @@ Live GitHub data requires `GITHUB_TOKEN` (the GraphQL API needs auth); without i
 
 Each adapter maps any failure (HTTP error, timeout, schema drift, blocked request) to an `unavailable` snapshot, so one platform failing degrades the card to `partial` instead of breaking it.
 
-> **Note:** solved.ac sits behind Cloudflare and may challenge requests from
-> datacenter IPs; when that happens the BOJ axis simply shows as unavailable.
-> LeetCode's endpoint is unofficial and treated as experimental.
+> **Note:** solved.ac sits behind Cloudflare, which rejects plain-Python TLS
+> fingerprints (a 403 "Just a moment…" challenge). codemaru fetches it with a
+> browser-impersonating TLS client (`curl_cffi`, Chrome profile); if it's ever
+> still blocked, the BOJ axis degrades to unavailable. LeetCode's endpoint is
+> unofficial and treated as experimental.
 
 ## Scoring
 

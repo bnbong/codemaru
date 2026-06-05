@@ -4,8 +4,12 @@ Uses the public solved.ac v3 endpoints (no BOJ scraping):
 - ``user/show`` for tier, rating, solved count, and class
 - ``user/problem_stats`` for the solved-by-difficulty distribution
 
-If the profile loads but the distribution call fails, the snapshot is still
-``ok`` with a zeroed distribution.
+solved.ac sits behind Cloudflare, which rejects plain-Python TLS fingerprints
+(``httpx``/``curl`` get a 403 "Just a moment…" challenge regardless of headers or
+IP). So this adapter uses ``curl_cffi`` with Chrome impersonation — a real
+browser TLS/JA3 fingerprint — to read the public API. If the profile loads but
+the distribution call fails, the snapshot is still ``ok`` with a zeroed
+distribution; any other failure degrades to ``unavailable``.
 """
 
 from __future__ import annotations
@@ -13,7 +17,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 from codemaru.models.snapshot import (
     DifficultyDistribution,
@@ -99,26 +103,32 @@ async def fetch_solvedac(
     handle: str,
     *,
     fetched_at: datetime,
-    client: httpx.AsyncClient,
+    timeout: float,
 ) -> SolvedAcSnapshot:
-    """Fetch a solved.ac snapshot, mapping any failure to ``unavailable``."""
+    """Fetch a solved.ac snapshot, mapping any failure to ``unavailable``.
+
+    Uses its own curl_cffi session (browser-impersonating TLS) rather than the
+    shared httpx client, since httpx is blocked by Cloudflare here.
+    """
     try:
-        show_resp = await client.get(SHOW_URL, params={"handle": handle})
-        if show_resp.status_code != 200:
-            return _unavailable(handle, f"http {show_resp.status_code}", fetched_at)
-        show = show_resp.json()
-        if not isinstance(show, dict) or "tier" not in show:
-            return _unavailable(handle, "unexpected response", fetched_at)
+        # impersonate a real Chrome TLS/JA3 fingerprint to pass Cloudflare.
+        async with AsyncSession(impersonate="chrome", timeout=timeout) as session:
+            show_resp = await session.get(SHOW_URL, params={"handle": handle})
+            if show_resp.status_code != 200:
+                return _unavailable(handle, f"http {show_resp.status_code}", fetched_at)
+            show = show_resp.json()
+            if not isinstance(show, dict) or "tier" not in show:
+                return _unavailable(handle, "unexpected response", fetched_at)
 
-        # The distribution is best-effort; a failure here still yields an ok profile.
-        stats: list[dict[str, Any]] | None = None
-        try:
-            stats_resp = await client.get(STATS_URL, params={"handle": handle})
-            if stats_resp.status_code == 200 and isinstance(stats_resp.json(), list):
-                stats = stats_resp.json()
-        except httpx.HTTPError:
-            stats = None
+            # The distribution is best-effort; a failure still yields an ok profile.
+            stats: list[dict[str, Any]] | None = None
+            try:
+                stats_resp = await session.get(STATS_URL, params={"handle": handle})
+                if stats_resp.status_code == 200 and isinstance(stats_resp.json(), list):
+                    stats = stats_resp.json()
+            except Exception:  # noqa: BLE001 - distribution is optional
+                stats = None
 
-        return parse_solvedac(show, stats, handle, fetched_at)
+            return parse_solvedac(show, stats, handle, fetched_at)
     except Exception:  # noqa: BLE001 - degrade gracefully on any network/schema error
         return _unavailable(handle, "request failed", fetched_at)

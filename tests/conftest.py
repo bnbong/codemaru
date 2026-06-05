@@ -14,10 +14,19 @@ def client() -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def _clear_cache() -> Iterator[None]:
-    """Keep the per-process summary cache from leaking between tests."""
+def _isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Keep tests hermetic: pin fixture mode and ignore a developer's local .env
+    (e.g. FIXTURE_MODE=false / GITHUB_TOKEN), and clear caches between tests.
+
+    Env vars take precedence over the .env file in pydantic-settings, so setting
+    FIXTURE_MODE here neutralizes a real .env. The `live_mode` fixture overrides
+    it back to false for the tests that exercise the live path.
+    """
+    monkeypatch.setenv("FIXTURE_MODE", "true")
+    get_settings.cache_clear()
     service.clear_cache()
     yield
+    get_settings.cache_clear()
     service.clear_cache()
 
 

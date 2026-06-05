@@ -58,3 +58,34 @@ class FakeClient:
         headers: dict[str, str] | None = None,
     ) -> FakeResponse:
         return self._resolve(RecordedCall("POST", url, json=json, headers=headers))
+
+
+def async_session_factory(
+    routes: dict[str, Route], calls: list[RecordedCall] | None = None
+) -> type:
+    """Build a stand-in for curl_cffi's AsyncSession (async context manager).
+
+    Returns a class so it can replace ``solvedac.AsyncSession`` via monkeypatch;
+    the constructor accepts and ignores impersonate=/timeout= kwargs.
+    """
+
+    class _FakeAsyncSession:
+        def __init__(self, **_: Any) -> None:
+            self._routes = {k: (list(v) if isinstance(v, list) else v) for k, v in routes.items()}
+
+        async def __aenter__(self) -> _FakeAsyncSession:
+            return self
+
+        async def __aexit__(self, *_: Any) -> bool:
+            return False
+
+        async def get(self, url: str, params: dict[str, Any] | None = None) -> FakeResponse:
+            if calls is not None:
+                calls.append(RecordedCall("GET", url, params=params))
+            entry = self._routes[url]
+            item = entry.pop(0) if isinstance(entry, list) else entry
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+    return _FakeAsyncSession

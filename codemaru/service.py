@@ -127,8 +127,16 @@ async def _build_live(profile: ProfileInput, settings: Settings) -> CodemaruSumm
                 profile.github, token=settings.github_token, fetched_at=fetched_at, client=client
             )
         )
+        # solved.ac uses its own curl_cffi session (Cloudflare blocks httpx), so
+        # it takes a timeout rather than the shared client.
         sa_task = (
-            asyncio.create_task(fetch_solvedac(profile.boj, fetched_at=fetched_at, client=client))
+            asyncio.create_task(
+                fetch_solvedac(
+                    profile.boj,
+                    fetched_at=fetched_at,
+                    timeout=settings.adapter_timeout_seconds,
+                )
+            )
             if profile.boj
             else None
         )

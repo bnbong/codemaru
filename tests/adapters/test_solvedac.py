@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
-from typing import cast
 
-import httpx
+import pytest
 
+from codemaru.adapters import solvedac
 from codemaru.adapters.solvedac import (
     SHOW_URL,
     STATS_URL,
@@ -11,7 +11,7 @@ from codemaru.adapters.solvedac import (
     parse_solvedac,
 )
 from codemaru.models.snapshot import PlatformStatus
-from tests.adapters.fakes import FakeClient, FakeResponse
+from tests.adapters.fakes import FakeResponse, RecordedCall, async_session_factory
 
 _TS = datetime(2026, 5, 31, tzinfo=UTC)
 
@@ -37,21 +37,26 @@ def test_parse_solvedac_clamps_out_of_range_tier():
     assert snap.tier == 30
 
 
-async def test_fetch_solvedac_ok_with_distribution():
-    client = FakeClient({SHOW_URL: FakeResponse(200, _SHOW), STATS_URL: FakeResponse(200, _STATS)})
-    snap = await fetch_solvedac("demo", fetched_at=_TS, client=cast(httpx.AsyncClient, client))
+async def test_fetch_solvedac_ok_with_distribution(monkeypatch: pytest.MonkeyPatch):
+    calls: list[RecordedCall] = []
+    routes = {SHOW_URL: FakeResponse(200, _SHOW), STATS_URL: FakeResponse(200, _STATS)}
+    monkeypatch.setattr(solvedac, "AsyncSession", async_session_factory(routes, calls))
+
+    snap = await fetch_solvedac("demo", fetched_at=_TS, timeout=5)
     assert snap.status is PlatformStatus.OK
     assert snap.tier == 18
     assert snap.solved_count == 1420
     assert snap.difficulty.silver == 200
     # handle is passed as a query param.
-    show_call = next(c for c in client.calls if c.url == SHOW_URL)
+    show_call = next(c for c in calls if c.url == SHOW_URL)
     assert show_call.params == {"handle": "demo"}
 
 
-async def test_fetch_solvedac_stats_failure_is_partial():
-    client = FakeClient({SHOW_URL: FakeResponse(200, _SHOW), STATS_URL: httpx.ConnectError("boom")})
-    snap = await fetch_solvedac("demo", fetched_at=_TS, client=cast(httpx.AsyncClient, client))
+async def test_fetch_solvedac_stats_failure_is_partial(monkeypatch: pytest.MonkeyPatch):
+    routes = {SHOW_URL: FakeResponse(200, _SHOW), STATS_URL: RuntimeError("boom")}
+    monkeypatch.setattr(solvedac, "AsyncSession", async_session_factory(routes))
+
+    snap = await fetch_solvedac("demo", fetched_at=_TS, timeout=5)
     # Profile metrics survive, but the missing distribution marks it partial.
     assert snap.status is PlatformStatus.PARTIAL
     assert snap.solved_count == 1420
@@ -59,7 +64,17 @@ async def test_fetch_solvedac_stats_failure_is_partial():
     assert "distribution" in (snap.note or "")
 
 
-async def test_fetch_solvedac_user_not_found_is_unavailable():
-    client = FakeClient({SHOW_URL: FakeResponse(404, {"error": "not found"})})
-    snap = await fetch_solvedac("ghost", fetched_at=_TS, client=cast(httpx.AsyncClient, client))
+async def test_fetch_solvedac_user_not_found_is_unavailable(monkeypatch: pytest.MonkeyPatch):
+    routes = {SHOW_URL: FakeResponse(404, {"error": "not found"})}
+    monkeypatch.setattr(solvedac, "AsyncSession", async_session_factory(routes))
+
+    snap = await fetch_solvedac("ghost", fetched_at=_TS, timeout=5)
+    assert snap.status is PlatformStatus.UNAVAILABLE
+
+
+async def test_fetch_solvedac_network_error_is_unavailable(monkeypatch: pytest.MonkeyPatch):
+    routes = {SHOW_URL: RuntimeError("cloudflare 403")}
+    monkeypatch.setattr(solvedac, "AsyncSession", async_session_factory(routes))
+
+    snap = await fetch_solvedac("demo", fetched_at=_TS, timeout=5)
     assert snap.status is PlatformStatus.UNAVAILABLE

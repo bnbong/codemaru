@@ -10,6 +10,9 @@ dependencies = [
     "pydantic-settings>=2.5.0",
     "jinja2>=3.1.4",
     "httpx>=0.27.0",
+    # solved.ac sits behind Cloudflare and rejects plain-Python TLS fingerprints;
+    # curl_cffi impersonates a real browser's TLS so the public API responds.
+    "curl_cffi>=0.7.0",
 ]
 
 [dependency-groups]
@@ -56,3 +59,7 @@ python_version = "3.12"
 packages = ["codemaru"]
 strict = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "curl_cffi.*"
+ignore_missing_imports = true
