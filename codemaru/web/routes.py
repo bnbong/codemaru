@@ -155,6 +155,7 @@ def index(
         "preview_url": preview_url,
         "snippets": snippets,
         "action_available": ACTION_AVAILABLE,
+        "mode": effective_mode(),
     }
     return templates.TemplateResponse(request, "index.html", context)
 

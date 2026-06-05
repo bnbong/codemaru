@@ -95,6 +95,13 @@ def test_themes_change_background():
     assert 'fill="none"' in transparent
 
 
+def test_footer_marks_stale_fallback():
+    fresh = _summary()
+    assert "stale data" not in render_card(fresh)
+    stale = fresh.model_copy(update={"stale": True})
+    assert "stale data" in render_card(stale)
+
+
 def test_error_card_is_valid_and_escaped():
     svg = render_error_card("github: invalid handle")
     assert svg.startswith("<svg")

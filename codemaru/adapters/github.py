@@ -121,11 +121,20 @@ def build_github_snapshot(
     followers: int,
     contrib: dict[str, Any],
     fetched_at: datetime,
+    partial: bool = False,
+    note: str | None = None,
 ) -> GitHubSnapshot:
-    """Assemble a GitHubSnapshot from aggregated repo data + contributions."""
+    """Assemble a GitHubSnapshot from aggregated repo data + contributions.
+
+    ``partial=True`` (with ``note``) means a repository page actually failed to
+    load, so the aggregates are incomplete. A successful fetch that merely hits
+    the intentional page cap stays ``ok`` (with an informational ``note``) — it
+    is current data, not a degradation, so it must not trigger stale fallback.
+    """
     active_days, longest_streak = _active_days_and_streak(contrib.get("contributionCalendar", {}))
     return GitHubSnapshot(
-        status=PlatformStatus.OK,
+        status=PlatformStatus.PARTIAL if partial else PlatformStatus.OK,
+        note=note,
         fetched_at=fetched_at,
         login=login,
         public_repos=repos_total,
@@ -195,9 +204,11 @@ async def fetch_github(
         page_info = repos.get("pageInfo", {})
 
         pages = 1
+        page_failed = False
         while page_info.get("hasNextPage") and pages < MAX_REPO_PAGES:
             nxt = await _page(page_info.get("endCursor"))
             if nxt is None:  # a later page failed — keep what we have
+                page_failed = True
                 break
             nxt_repos = nxt.get("repositories", {})
             s, f, langs = parse_repo_nodes(nxt_repos.get("nodes", []) or [])
@@ -206,6 +217,16 @@ async def fetch_github(
             languages |= langs
             page_info = nxt_repos.get("pageInfo", {})
             pages += 1
+
+        if page_failed:
+            # Genuine incompleteness from an error → partial (may stale-fall-back).
+            partial, note = True, "repository data incomplete (a page failed to load)"
+        elif page_info.get("hasNextPage"):
+            # Hit the intentional cap on a successful fetch → still ok, just noted.
+            # Repos are ordered by stars desc, so the tail contributes ~nothing.
+            partial, note = False, f"aggregated top {MAX_REPO_PAGES * 100} repositories by stars"
+        else:
+            partial, note = False, None
 
         return build_github_snapshot(
             login=first.get("login", login),
@@ -216,6 +237,8 @@ async def fetch_github(
             followers=followers,
             contrib=contrib,
             fetched_at=fetched_at,
+            partial=partial,
+            note=note,
         )
     except Exception:  # noqa: BLE001 - degrade gracefully on any network/schema error
         return _unavailable(login, "request failed", fetched_at)

@@ -90,7 +90,9 @@ def _apply_stale_fallback(
         return summary
     last_good = _stale.get(key)
     if last_good is not None:
-        return CodemaruSummary.model_validate_json(last_good)
+        # Serve the last good summary, but mark it stale so JSON consumers and
+        # the card footer can tell it isn't a fresh read.
+        return CodemaruSummary.model_validate_json(last_good).model_copy(update={"stale": True})
     return summary
 
 

@@ -1,0 +1,40 @@
+# Path-based PR labels (actions/labeler v5). Labels must exist in the repo.
+"area: adapters":
+  - changed-files:
+      - any-glob-to-any-file: "codemaru/adapters/**"
+
+"area: scoring":
+  - changed-files:
+      - any-glob-to-any-file: ["codemaru/core/**", "codemaru/models/score.py"]
+
+"area: render":
+  - changed-files:
+      - any-glob-to-any-file: ["codemaru/render/**", "codemaru/render/assets/**"]
+
+"area: web":
+  - changed-files:
+      - any-glob-to-any-file: ["codemaru/web/**", "templates/**", "static/**"]
+
+"area: api":
+  - changed-files:
+      - any-glob-to-any-file: ["codemaru/app.py", "codemaru/service.py", "api/**"]
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: "tests/**"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ["**/*.md", ".github/preview/**"]
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file: ["pyproject.toml", "uv.lock", "requirements.txt"]
+
+deployment:
+  - changed-files:
+      - any-glob-to-any-file: ["vercel.json", "api/**"]

@@ -71,7 +71,7 @@
         <div>
           <div class="preview-head">
             <h3>Preview</h3>
-            <button type="button" class="copy" id="refresh" title="Re-fetch the card, bypassing any browser/CDN cache">↻ Refresh</button>
+            <button type="button" class="copy" id="refresh" title="Reload the preview — bypasses the browser/CDN cache">↻ Reload</button>
           </div>
           <div class="preview">
             {% if preview_url %}
@@ -104,7 +104,15 @@
           {% endif %}
 
           <p class="note">
-            Fixture preview — real GitHub / solved.ac / LeetCode data lands in the next release.
+            {% if mode == "fixture" %}
+            Fixture preview — sample data. Set <code>FIXTURE_MODE=false</code> for live GitHub /
+            solved.ac / LeetCode.
+            {% elif mode == "unavailable" %}
+            Live data is currently unavailable — the service is configured for live mode but no
+            adapters are ready.
+            {% else %}
+            Live data is best-effort — a platform that's unavailable just degrades the card.
+            {% endif %}
             Scores summarize public activity, not an absolute skill rating.
           </p>
         </div>

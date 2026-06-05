@@ -1,6 +1,7 @@
 // Progressive enhancement for the generator. The page works without JS (the
 // form GETs "/" and the server renders a live preview); this adds instant
-// preview updates, a cache-bypassing refresh, and copy buttons.
+// preview updates, a Reload that bypasses the browser/CDN cache (the server's
+// summary cache still applies), and copy buttons.
 (function () {
   "use strict";
 
@@ -86,6 +87,9 @@
 
     var query = buildQuery(s);
     var previewSrc = "/api/card.svg?" + query;
+    // Reload appends a unique value so the browser/CDN refetch the image; the
+    // server ignores it (its own summary cache still applies). Not added to the
+    // copied snippets.
     if (refreshKey > 0) previewSrc += "&refresh=" + refreshKey;
 
     if (els.previewImg) {
