@@ -107,6 +107,9 @@
             {% if mode == "fixture" %}
             Fixture preview — sample data. Set <code>FIXTURE_MODE=false</code> for live GitHub /
             solved.ac / LeetCode.
+            {% elif mode == "unavailable" %}
+            Live data is currently unavailable — the service is configured for live mode but no
+            adapters are ready.
             {% else %}
             Live data is best-effort — a platform that's unavailable just degrades the card.
             {% endif %}

@@ -16,7 +16,7 @@ assignees: ''
 
 ## Bug status
 
-> Please describe the situation of the bug in ***given-when-then format if possible
+> Please describe the situation of the bug in **given-when-then** format if possible
 
 (Write here)
 

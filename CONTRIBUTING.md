@@ -27,7 +27,7 @@ from CI; default tests use fixtures and need no network or secrets.
 ## A few conventions
 
 - The card SVG must render in a GitHub README: no JS, no external resources;
-  escape all user-provided text (`render/xml.py`).
+  escape all user-provided text (`codemaru/render/xml.py`).
 - The radar is always 5 axes; confidence is never drawn on the card (it lives in
   `summary.json` and caps the tier).
 - Change any scoring formula → bump `SCORE_VERSION` and update the tests.

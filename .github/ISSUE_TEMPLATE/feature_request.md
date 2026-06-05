@@ -10,7 +10,7 @@ assignees: ''
 
 ## Feature Description
 
-> Please explain briefly about the features you want to add or the features you want to add
+> Please briefly explain the feature you want to add or the improvement you'd like
 
 (Write here)
 

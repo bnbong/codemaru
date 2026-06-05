@@ -122,10 +122,12 @@ async def test_fetch_github_later_page_failure_is_partial():
     assert snap.status is PlatformStatus.PARTIAL
     assert snap.total_stars == 500
     assert snap.public_repos == 150
-    assert "truncated" in (snap.note or "")
+    assert "incomplete" in (snap.note or "")
 
 
-async def test_fetch_github_page_cap_reached_is_partial(monkeypatch: pytest.MonkeyPatch):
+async def test_fetch_github_page_cap_reached_stays_ok(monkeypatch: pytest.MonkeyPatch):
+    # Hitting the cap on a *successful* fetch is not a degradation — it stays ok
+    # (so it never triggers stale fallback), with an informational note.
     monkeypatch.setattr(github, "MAX_REPO_PAGES", 1)
     page1 = _page(
         [{"stargazerCount": 500, "forkCount": 50, "primaryLanguage": {"name": "Python"}}],
@@ -136,7 +138,8 @@ async def test_fetch_github_page_cap_reached_is_partial(monkeypatch: pytest.Monk
     snap = await fetch_github(
         "octocat", token="t", fetched_at=_TS, client=cast(httpx.AsyncClient, client)
     )
-    assert snap.status is PlatformStatus.PARTIAL
+    assert snap.status is PlatformStatus.OK
+    assert "top 100" in (snap.note or "")
 
 
 async def test_fetch_github_without_token_is_unavailable():
