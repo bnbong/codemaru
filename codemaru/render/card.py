@@ -5,7 +5,7 @@ Layout (ported from the codemaru design system, ui_kits/card/Card.jsx):
   - default 640x300: tier panel (faceted emblem + 마루 crest ornament + calligraphy
     tier name + 3 strength badges + GitHub-linked handle + bottom wordmark), a
     right 5-axis radar chart, and a supporting-metric row.
-  - compact 250x256: the tier panel only (no radar, metric row, or footer).
+  - compact 250x270: the tier panel only (no radar, metric row, or footer).
 
 All colors come from theme tokens; user-derived text is escaped and length-
 capped; coordinates are fixed per layout so text never overflows.
@@ -76,7 +76,7 @@ _DEFAULT = _Layout(
 
 _COMPACT = _Layout(
     width=250,
-    height=256,
+    height=270,
     panel_width=250,
     emblem_cx=125,
     emblem_cy=72,
@@ -87,9 +87,12 @@ _COMPACT = _Layout(
     trophy_label_y=228,
     trophy_spacing=66,
     trophy_scale=0.94,
-    handle_y=238,
-    wordmark_y=252,
-    footer_y=244,  # unused in compact (no footer)
+    # Handle and wordmark need the same vertical breathing room as the default
+    # layout (≈19px between them, ≈7px to the bottom edge); otherwise the
+    # underlined @handle and the "codemaru" wordmark collide.
+    handle_y=244,
+    wordmark_y=263,
+    footer_y=266,  # unused in compact (no footer)
     glow_r=170,
     radar=None,
     metrics_y=None,

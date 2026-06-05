@@ -28,7 +28,7 @@ def test_card_svg_cache_headers(client: TestClient):
 def test_card_svg_compact(client: TestClient):
     res = client.get("/api/card.svg", params={"github": "octocat", "compact": "true"})
     assert res.status_code == 200
-    assert 'viewBox="0 0 250 256"' in res.text
+    assert 'viewBox="0 0 250 270"' in res.text
 
 
 def test_card_svg_invalid_returns_error_card_with_200(client: TestClient):

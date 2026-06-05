@@ -2,7 +2,7 @@
   <img src=".github/codemaru_logo_text.png" alt="codemaru"/>
 </p>
 <p align="center">
-<em><b>Codemaru:</b> Render a developer's public activity and algorithm-training stats as an embeddable <b>summary card</b> for GitHub profile READMEs. </em>
+<em><b>Codemaru:</b> Render a developer's public activity and algorithm-training stats as an embeddable <b>summary card</b> for GitHub profile READMEs.</em>
 </p>
 <p align="center">
 <img src="https://img.shields.io/badge/Python-3.12+-3776ab.svg?style=flat&logo=python&logoColor=white" alt="Python"/>
@@ -11,14 +11,17 @@
  <img src="https://codecov.io/gh/bnbong/codemaru/graph/badge.svg?token=A7B1BHUtSm"/>
  </a>
 </p>
+<p align="center">
+  <b>English</b> · <a href="README.ko.md">한국어</a>
+</p>
 
 ---
 
-> `code` + 순우리말 `마루` — climb to the top of your coding ability and keep growing.
+> `code` + `마루` (native Korean for *ridge / summit*) — climb to the top of your coding ability and keep growing.
 
-A tool that turns your public developer activity into an embeddable SVG card. 
+A tool that turns your public developer activity into an embeddable SVG card.
 
-It reads **GitHub**, **BOJ / solved.ac**, and **LeetCode**, scores it across five axes, places you on an 8-rung tier ladder, and renders a self-contained, themeable card you can drop into a README.
+It reads **GitHub**, **BOJ / solved.ac**, and **LeetCode**, scores it across five axes, places you on an 8-rung tier ladder, and renders a self-contained card you can drop straight into a README.
 
 <p align="center">
   <picture>
@@ -26,14 +29,6 @@ It reads **GitHub**, **BOJ / solved.ac**, and **LeetCode**, scores it across fiv
     <img width="560" alt="codemaru summary card" src=".github/preview/card-light.png">
   </picture>
 </p>
-
-## The card
-
-The left **tier panel** carries a faceted hexagonal **emblem** (the overall score sits in the medallion) wrapped in a 마루 crest ornament — a sun-ray summit crown with laurel fronds that grows richer with rank. 
-
-Below it sits the tier's **calligraphy nameplate**, the **top-3 strengths** as competency-glyph medal badges (gold / silver / bronze by rank), and your `@handle`, linked to your GitHub profile. 
-
-The right side is a fixed **5-axis radar** with a supporting **metric row**. Three themes (`default` / `dark` / `transparent`) and a **compact** layout (tier panel only, `250×256`) are available.
 
 ## Tiers
 
@@ -47,58 +42,62 @@ Eight ranks, from a humble Seed to the summit, **Maru**:
 Seed → Bronze → Silver → Gold → Platinum → Diamond → Master → Maru
 ```
 
+## Themes
+
+Three themes are available, selected with the `theme` parameter (or the generator's Theme dropdown).
+
+<table>
+  <tr>
+    <td align="center"><code>default</code></td>
+    <td align="center"><code>dark</code></td>
+    <td align="center"><code>transparent</code></td>
+  </tr>
+  <tr>
+    <td><img src=".github/preview/card-light.png" width="280" alt="default theme"/></td>
+    <td><img src=".github/preview/card-dark.png" width="280" alt="dark theme"/></td>
+    <td><img src=".github/preview/card-transparent.png" width="280" alt="transparent theme"/></td>
+  </tr>
+</table>
+
+> More themes are coming.
+
+A **compact** layout drops the radar and metric row, leaving the **tier panel only** (`250×270`) — handy for tight spaces or a README sidebar. Enable it with `compact=true` (or the generator's Layout → compact).
+
+<p align="center">
+  <img src=".github/preview/card-compact.png" width="220" alt="compact layout"/>
+</p>
+
 ## Quick start
+
+### Use the hosted generator
+
+At **[codemaru.bnbong.com](https://codemaru.bnbong.com)**, enter your handles to get a live preview plus copy-paste Markdown / HTML snippets for your README.
+
+<p align="center">
+  <img src=".github/preview/generator.png" width="760" alt="codemaru hosted generator"/>
+</p>
+
+1. Enter your **GitHub username** (required) and, optionally, your **BOJ / solved.ac** and **LeetCode** handles.
+2. Pick a **Theme** (default / dark / transparent) and **Layout** (default / compact).
+3. Check the **Preview**, then hit **Copy** on the **Markdown** or **HTML `<picture>`** snippet and paste it into your README.
+4. Press **↻ Reload** to refetch the data.
+
+### Run locally
 
 ```bash
 uv sync                          # install deps into .venv
 uv run uvicorn codemaru.app:app --reload   # http://localhost:8000
 ```
 
-Open `http://localhost:8000` for the generator (live preview + copy snippets),
-or call the API directly.
+Open `http://localhost:8000` for the generator (live preview + copy snippets), or call the API directly.
 
-## API
-
-```
-GET /                  # server-rendered generator (live preview + copy snippets)
-GET /api/card.svg      # image/svg+xml
-GET /api/summary.json  # application/json
-GET /api/health        # liveness + scoreVersion
-```
-
-Query params: `github` (required), `boj`, `leetcode`, `theme` (`default`|`dark`|`transparent`), `compact` (`true`/`false`).
-
-- Invalid input returns a **visible SVG error card with HTTP 200** (plus an
-  `X-Codemaru-Error: true` header and `Cache-Control: no-store`) so GitHub's
-  image proxy renders the error instead of a broken image; `summary.json`
-  returns a structured `{ "error": ... }` with a 4xx/5xx status.
-- Cards send `Cache-Control: public, max-age=300` plus
-  `CDN-Cache-Control` / `Vercel-CDN-Cache-Control` `s-maxage=3600,
-  stale-while-revalidate=86400`, and an `ETag`.
-
-### Fixture mode vs live mode
-
-`FIXTURE_MODE` defaults to **`true`** so local dev and CI need no secrets or network — endpoints serve deterministic fixtures and `/api/health` reports `"mode": "fixture"`.
-
-Set `FIXTURE_MODE=false` for **live mode**: GitHub, solved.ac, and LeetCode are fetched concurrently with a per-request timeout (`ADAPTER_TIMEOUT_SECONDS`). 
-
-Live GitHub data requires `GITHUB_TOKEN` (the GraphQL API needs auth); without it the GitHub snapshot is `unavailable`. 
-
-Each adapter maps any failure (HTTP error, timeout, schema drift, blocked request) to an `unavailable` snapshot, so one platform failing degrades the card to `partial` instead of breaking it.
-
-> **Note:** solved.ac sits behind Cloudflare, which rejects plain-Python TLS
-> fingerprints (a 403 "Just a moment…" challenge). codemaru fetches it with a
-> browser-impersonating TLS client (`curl_cffi`, Chrome profile); if it's ever
-> still blocked, the BOJ axis degrades to unavailable. LeetCode's endpoint is
-> unofficial and treated as experimental.
+> For the API endpoints, fixture / live modes, and other run / contribution details, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## GitHub Action (static generation)
 
-Prefer not to depend on the hosted endpoint at render time? The **`bnbong/codemaru`**
-Action runs the same scoring/render pipeline inside your own repo's CI and commits
-a self-contained SVG. The card then loads straight from your repository — no live
-service call, immune to any outage, fully under your control. Refresh it on a
-schedule:
+Prefer not to depend on the hosted endpoint? The **`bnbong/codemaru`** Action runs the same scoring/render pipeline inside your own repo's CI, commits the SVG, and the card then loads straight from your repository.
+
+Add this workflow under `.github/workflows/`:
 
 ```yaml
 name: Update codemaru card
@@ -115,9 +114,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: bnbong/codemaru@v1
         with:
-          github: ${{ github.repository_owner }}
-          boj: your-solvedac-handle       # optional
-          leetcode: your-leetcode-handle  # optional
+          github: ${{ github.repository_owner }}   # your GitHub username (auto-filled)
+          boj: your-solvedac-handle                # optional
+          leetcode: your-leetcode-handle           # optional
           out: profile/codemaru.svg
       - run: |
           git config user.name "github-actions"
@@ -127,27 +126,29 @@ jobs:
           git push
 ```
 
-Then embed the committed file: `![codemaru](profile/codemaru.svg)`.
+Then embed the committed file anywhere in your README: `![codemaru](profile/codemaru.svg)`.
 
 | Input          | Default                | Description                                  |
 | -------------- | ---------------------- | -------------------------------------------- |
-| `github`       | —  (required)          | GitHub username to summarize                 |
+| `github`       | —  (required)          | **GitHub username** to summarize (e.g. `octocat`) |
 | `boj`          | `""`                   | solved.ac / BOJ handle                       |
 | `leetcode`     | `""`                   | LeetCode handle                              |
 | `theme`        | `default`              | `default` \| `dark` \| `transparent`         |
 | `compact`      | `false`                | compact (tier-panel-only) layout             |
 | `out`          | `profile/codemaru.svg` | output path for the SVG                       |
-| `github-token` | `${{ github.token }}`  | token for reading public GitHub data         |
+| `github-token` | `${{ github.token }}`  | auth token for reading data (**Optional**, the default workflow token is enough) |
 
-The default workflow token reads your own public GitHub data; no extra secret is
-needed. The Action wraps the `codemaru generate` CLI (`codemaru generate --github
-<user> --out <path>`), so you can also run it locally with `uv run codemaru generate`.
+> **`github` is not `github-token`.** `github` takes a **GitHub username** — not a token.
+>
+> The `${{ github.repository_owner }}` in the example is a built-in GitHub variable that auto-resolves to the username of the owner of the repo the workflow runs in, so if you wrote it as in the example you don't need to change anything.
+>
+> `github-token`, by contrast, is the **auth token used to read data**. If you want the analysis to also cover **private repositories**, issue a PAT with private-repo read access, add it to your repository secrets, and pass it on `github-token` (see the table) — e.g. `github-token: ${{ secrets.YOUR_PAT }}`.
+
+The Action wraps the `codemaru generate --github <user> --out <path>` CLI, so you can also run it locally with `uv run codemaru generate`.
 
 ## Scoring
 
-Scores summarize **public activity** — not an absolute skill rating. 
-
-All scoring functions are pure; raw counts are never summed directly — unbounded counts use logarithmic saturation, $\dfrac{\ln(1 + \text{value})}{\ln(1 + \text{saturation})}$, where `saturation` is the count at which the score reaches ~100.
+*Scores summarize **public activity** — not an absolute skill rating.*
 
 | Axis            | Signals (source)                                                |
 | --------------- | --------------------------------------------------------------- |
@@ -158,10 +159,9 @@ All scoring functions are pure; raw counts are never summed directly — unbound
 | Depth           | BOJ tier, hard-problem mix, LeetCode hard/contest, lang breadth |
 
 ```
-overall = 0.30*openSource + 0.20*problemSolving + 0.20*depth
-        + 0.15*consistency + 0.15*impact
+overall (the number in the tier medallion) = 0.30*openSource + 0.20*problemSolving + 0.20*depth + 0.15*consistency + 0.15*impact
 ```
 
-Confidence is weighted across platforms (GitHub ×0.6 volume-weighted, solved.ac ×0.25, LeetCode ×0.15 discounted as experimental); 
+Confidence is weighted across platforms (GitHub ×0.6 volume-weighted, solved.ac ×0.25, LeetCode ×0.15 discounted as experimental).
 
-low confidence caps the tier so a GitHub-only profile tops out at Gold.
+Low confidence caps the tier, so a GitHub-only profile tops out at Gold.

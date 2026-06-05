@@ -56,7 +56,7 @@ def test_default_card_shows_all_five_axes():
 
 def test_compact_drops_radar_metrics_and_footer():
     svg = render_card(_summary(), RenderOptions(compact=True))
-    assert 'viewBox="0 0 250 256"' in svg
+    assert 'viewBox="0 0 250 270"' in svg
     assert ">Problem Solving<" not in svg
     assert "scoreVersion" not in svg
     assert "2026-05-31" not in svg
