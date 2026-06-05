@@ -19,7 +19,7 @@ def test_in_memory_cache_set_get_expiry_clear():
     assert cache.get("k") is None
 
 
-def test_get_summary_uses_cache(monkeypatch: pytest.MonkeyPatch):
+async def test_get_summary_uses_cache(monkeypatch: pytest.MonkeyPatch):
     calls = {"n": 0}
     real = demo.resolve_fixture_bundle
 
@@ -31,14 +31,14 @@ def test_get_summary_uses_cache(monkeypatch: pytest.MonkeyPatch):
     service.clear_cache()
 
     profile = ProfileInput(github="octocat", boj="baek")
-    first = service.get_summary(profile)
-    second = service.get_summary(profile)
+    first = await service.get_summary(profile)
+    second = await service.get_summary(profile)
 
     assert calls["n"] == 1  # second call served from cache
     assert first == second
 
 
-def test_get_summary_distinct_profiles_build_separately(monkeypatch: pytest.MonkeyPatch):
+async def test_get_summary_distinct_profiles_build_separately(monkeypatch: pytest.MonkeyPatch):
     calls = {"n": 0}
     real = demo.resolve_fixture_bundle
 
@@ -49,6 +49,6 @@ def test_get_summary_distinct_profiles_build_separately(monkeypatch: pytest.Monk
     monkeypatch.setattr(service, "resolve_fixture_bundle", counting)
     service.clear_cache()
 
-    service.get_summary(ProfileInput(github="octocat"))
-    service.get_summary(ProfileInput(github="torvalds"))
+    await service.get_summary(ProfileInput(github="octocat"))
+    await service.get_summary(ProfileInput(github="torvalds"))
     assert calls["n"] == 2

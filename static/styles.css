@@ -6,6 +6,9 @@
   --muted: #8b949e;
   --accent: #58a6ff;
   --radius: 10px;
+  /* Coding-tool type pairing: Space Grotesk for UI, JetBrains Mono for code. */
+  --font-sans: "Space Grotesk", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 * {
@@ -18,7 +21,7 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   line-height: 1.5;
 }
 
@@ -39,6 +42,16 @@ a {
 .header h1 {
   margin: 0 0 4px;
   font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header h1 .logo {
+  height: 28px;
+  width: auto;
 }
 
 .header p {
@@ -71,6 +84,9 @@ a {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* allow the field (a flex item in .row) to shrink below its input's
+     intrinsic width instead of overflowing the fixed-width panel. */
+  min-width: 0;
 }
 
 .field label {
@@ -86,6 +102,8 @@ a {
   color: var(--text);
   padding: 8px 10px;
   font-size: 14px;
+  width: 100%;
+  min-width: 0;
 }
 
 .row {
@@ -94,7 +112,8 @@ a {
 }
 
 .row > * {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .error {
@@ -157,7 +176,7 @@ a {
   padding: 10px 12px;
   overflow-x: auto;
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   white-space: pre-wrap;
   word-break: break-all;
 }

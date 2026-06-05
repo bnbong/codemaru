@@ -75,7 +75,7 @@ def health() -> JSONResponse:
 
 
 @router.get("/api/card.svg")
-def card_svg(
+async def card_svg(
     request: Request,
     github: str | None = None,
     boj: str | None = None,
@@ -85,7 +85,7 @@ def card_svg(
 ) -> Response:
     try:
         profile, options = parse_request(github, boj, leetcode, theme, compact)
-        summary = get_summary(profile)
+        summary = await get_summary(profile)
     except (QueryError, LiveDataUnavailableError) as exc:
         return _error_card(str(exc), theme)
 
@@ -95,7 +95,7 @@ def card_svg(
 
 
 @router.get("/api/summary.json")
-def summary_json(
+async def summary_json(
     github: str | None = None,
     boj: str | None = None,
     leetcode: str | None = None,
@@ -104,7 +104,7 @@ def summary_json(
 ) -> Response:
     try:
         profile, _options = parse_request(github, boj, leetcode, theme, compact)
-        summary = get_summary(profile)
+        summary = await get_summary(profile)
     except QueryError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
     except LiveDataUnavailableError as exc:

@@ -1,18 +1,4 @@
-from collections.abc import Iterator
-
-import pytest
 from fastapi.testclient import TestClient
-
-from codemaru.settings import get_settings
-
-
-@pytest.fixture
-def live_mode(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Simulate FIXTURE_MODE=false while no live adapters exist."""
-    monkeypatch.setenv("FIXTURE_MODE", "false")
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
 
 
 def test_health(client: TestClient):
@@ -122,24 +108,8 @@ def test_index_invalid_input_shows_error(client: TestClient):
     assert "github" in res.text
 
 
-# --- fixture-vs-live honesty (no live adapters implemented yet) ---
+# --- fixture-vs-live mode reporting (orchestration tests live in test_live_mode) ---
 
 
-def test_health_reports_unavailable_when_fixture_mode_off(client: TestClient, live_mode: None):
-    # Never claims "live" while only fixtures exist.
-    assert client.get("/api/health").json()["mode"] == "unavailable"
-
-
-def test_summary_json_live_mode_returns_503_not_fixture(client: TestClient, live_mode: None):
-    res = client.get("/api/summary.json", params={"github": "octocat"})
-    assert res.status_code == 503
-    assert "error" in res.json()
-
-
-def test_card_svg_live_mode_returns_error_card_not_fixture(client: TestClient, live_mode: None):
-    res = client.get("/api/card.svg", params={"github": "octocat"})
-    assert res.status_code == 200
-    assert res.headers["x-codemaru-error"] == "true"
-    # Crucially, it does not silently serve a fixture card as if it were live.
-    assert "Master" not in res.text
-    assert "live" in res.text
+def test_health_reports_live_when_fixture_mode_off(client: TestClient, live_mode: None):
+    assert client.get("/api/health").json()["mode"] == "live"

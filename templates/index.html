@@ -8,12 +8,18 @@
       name="description"
       content="Render your public developer activity and algorithm-training stats as an embeddable GitHub README card."
     />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body data-action-available="{{ 'true' if action_available else 'false' }}">
     <main class="container">
       <header class="header">
-        <h1>codemaru</h1>
+        <h1><img class="logo" src="/static/codemaru_logo.png" alt="" aria-hidden="true" /> codemaru</h1>
         <p>Summarize your developer activity as an embeddable GitHub README card.</p>
       </header>
 

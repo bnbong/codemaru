@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from codemaru import service
 from codemaru.app import app
+from codemaru.settings import get_settings
 
 
 @pytest.fixture
@@ -18,3 +19,12 @@ def _clear_cache() -> Iterator[None]:
     service.clear_cache()
     yield
     service.clear_cache()
+
+
+@pytest.fixture
+def live_mode(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Run with FIXTURE_MODE=false so the live adapter path is exercised."""
+    monkeypatch.setenv("FIXTURE_MODE", "false")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

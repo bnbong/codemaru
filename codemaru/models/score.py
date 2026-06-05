@@ -34,11 +34,12 @@ AXIS_LABELS: dict[Axis, str] = {
     Axis.DEPTH: "Depth",
 }
 
-# Compact labels used under the strength trophies where space is tight.
+# Labels under the strength badges. Most use the full axis name; the two longest
+# are shortened so they fit beneath a 30px tile.
 AXIS_SHORT_LABELS: dict[Axis, str] = {
-    Axis.OPEN_SOURCE: "Open Src",
+    Axis.OPEN_SOURCE: "Open Source",
     Axis.IMPACT: "Impact",
-    Axis.CONSISTENCY: "Streak",
+    Axis.CONSISTENCY: "Consistency",
     Axis.PROBLEM_SOLVING: "Solving",
     Axis.DEPTH: "Depth",
 }

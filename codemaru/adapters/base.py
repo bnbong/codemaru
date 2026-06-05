@@ -1,0 +1,22 @@
+"""Shared adapter utilities: HTTP client config and a standard User-Agent.
+
+Adapters receive an ``httpx.AsyncClient`` from the service layer so all requests
+in one card build share a connection pool and a single timeout budget.
+"""
+
+from __future__ import annotations
+
+import httpx
+
+# Some endpoints (notably solved.ac and LeetCode) reject requests without a
+# browser-like User-Agent.
+USER_AGENT = "codemaru/0.1 (+https://github.com/bnbong/codemaru)"
+
+
+def build_client(timeout: float) -> httpx.AsyncClient:
+    """Create an AsyncClient with a per-request timeout and default headers."""
+    return httpx.AsyncClient(
+        timeout=httpx.Timeout(timeout),
+        headers={"User-Agent": USER_AGENT},
+        follow_redirects=True,
+    )

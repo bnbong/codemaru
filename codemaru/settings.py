@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     github_token: str | None = None
 
     cache_ttl_seconds: int = 3600
+    # Failed/degraded (partial/unavailable) results are cached only briefly so a
+    # transient outage isn't pinned for the full TTL.
+    negative_cache_ttl_seconds: int = 60
+    # How long a last-successful summary is retained for stale fallback.
     stale_ttl_seconds: int = 86400
     adapter_timeout_seconds: float = 3.0
 

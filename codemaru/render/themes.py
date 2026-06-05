@@ -85,24 +85,25 @@ TIER_COLORS: dict[Tier, str] = {
     Tier.MARU: "#f778ba",
 }
 
-# Emblem fill gradient (top -> bottom) per tier: a brighter highlight falling to
-# a saturated base, so the badge reads like a game rank emblem.
-TIER_GRADIENTS: dict[Tier, tuple[str, str]] = {
-    Tier.SEED: ("#aeb6bf", "#697079"),
-    Tier.BRONZE: ("#e8a262", "#9c5a23"),
-    Tier.SILVER: ("#e2e7ed", "#8a93a0"),
-    Tier.GOLD: ("#f6d365", "#cca017"),
-    Tier.PLATINUM: ("#6fe3d2", "#2a9c99"),
-    Tier.DIAMOND: ("#8cccff", "#2f7fe0"),
-    Tier.MASTER: ("#c4a0ff", "#7d4fdb"),
-    Tier.MARU: ("#ff9ad0", "#e0479b"),
+# Emblem metal gradient per tier as 3 stops: (highlight, saturated base, deep
+# shadow). Used for the faceted hex crest and the crest ornament fronds/rays.
+TIER_GRADIENTS: dict[Tier, tuple[str, str, str]] = {
+    Tier.SEED: ("#c2c9d1", "#8b949e", "#5b626b"),
+    Tier.BRONZE: ("#f0ab68", "#cd7f32", "#824a1d"),
+    Tier.SILVER: ("#eef2f6", "#b9c1cb", "#7c8591"),
+    Tier.GOLD: ("#fbe08a", "#e6be3c", "#a87f12"),
+    Tier.PLATINUM: ("#8defdd", "#3fb6c4", "#1f7d86"),
+    Tier.DIAMOND: ("#a6d8ff", "#4aa8ff", "#2167c9"),
+    Tier.MASTER: ("#d4b6ff", "#a371f7", "#6a3fce"),
+    Tier.MARU: ("#ffb3dc", "#f778ba", "#cf3886"),
 }
 
-# Medal tints for the strength trophies, ranked best -> third.
-RANK_TINTS: list[tuple[str, str]] = [
-    ("#f6d365", "#c79a17"),  # 1st — gold
-    ("#d7dde5", "#9aa3b0"),  # 2nd — silver
-    ("#e0a064", "#a86a2c"),  # 3rd — bronze
+# Medal tints for the three strength tiles, ranked best -> third:
+# (tile fill, border, glyph ink).
+RANK_TINTS: list[tuple[str, str, str]] = [
+    ("#f7d97a", "#d6a31f", "#6e4f06"),  # 1st — gold
+    ("#dfe5ec", "#a3acb8", "#4a525e"),  # 2nd — silver
+    ("#e7ad74", "#b67740", "#683c19"),  # 3rd — bronze
 ]
 
 

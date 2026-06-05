@@ -16,7 +16,36 @@
 
 > `code` + 순우리말 `마루` — climb to the top of your coding ability and keep growing.
 
-A Python / FastAPI service that turns your public developer activity into an embeddable SVG card.
+A tool that turns your public developer activity into an embeddable SVG card. 
+
+It reads **GitHub**, **BOJ / solved.ac**, and **LeetCode**, scores it across five axes, places you on an 8-rung tier ladder, and renders a self-contained, themeable card you can drop into a README.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/preview/card-dark.png">
+    <img width="560" alt="codemaru summary card" src=".github/preview/card-light.png">
+  </picture>
+</p>
+
+## The card
+
+The left **tier panel** carries a faceted hexagonal **emblem** (the overall score sits in the medallion) wrapped in a 마루 crest ornament — a sun-ray summit crown with laurel fronds that grows richer with rank. 
+
+Below it sits the tier's **calligraphy nameplate**, the **top-3 strengths** as competency-glyph medal badges (gold / silver / bronze by rank), and your `@handle`, linked to your GitHub profile. 
+
+The right side is a fixed **5-axis radar** with a supporting **metric row**. Three themes (`default` / `dark` / `transparent`) and a **compact** layout (tier panel only, `250×256`) are available.
+
+## Tiers
+
+Eight ranks, from a humble Seed to the summit, **Maru**:
+
+<p align="center">
+  <img width="820" alt="codemaru tier ladder: Seed, Bronze, Silver, Gold, Platinum, Diamond, Master, Maru" src=".github/preview/tier-ladder.png">
+</p>
+
+```
+Seed → Bronze → Silver → Gold → Platinum → Diamond → Master → Maru
+```
 
 ## Quick start
 
@@ -24,6 +53,9 @@ A Python / FastAPI service that turns your public developer activity into an emb
 uv sync                          # install deps into .venv
 uv run uvicorn codemaru.app:app --reload   # http://localhost:8000
 ```
+
+Open `http://localhost:8000` for the generator (live preview + copy snippets),
+or call the API directly.
 
 ## API
 
@@ -44,13 +76,21 @@ Query params: `github` (required), `boj`, `leetcode`, `theme` (`default`|`dark`|
   `CDN-Cache-Control` / `Vercel-CDN-Cache-Control` `s-maxage=3600,
   stale-while-revalidate=86400`, and an `ETag`.
 
-> **Fixture mode only (for now).** Live adapters aren't implemented yet, so
-> `FIXTURE_MODE` defaults to `true` and `/api/health` reports `"mode":
-> "fixture"`. Setting `FIXTURE_MODE=false` is treated as a configuration error
-> (card → error card, JSON → 503, health → `"unavailable"`) rather than serving
-> fixture data dressed up as live.
+### Fixture mode vs live mode
 
-## Scoring (v0, `SCORE_VERSION = 0.1.0`)
+`FIXTURE_MODE` defaults to **`true`** so local dev and CI need no secrets or network — endpoints serve deterministic fixtures and `/api/health` reports `"mode": "fixture"`.
+
+Set `FIXTURE_MODE=false` for **live mode**: GitHub, solved.ac, and LeetCode are fetched concurrently with a per-request timeout (`ADAPTER_TIMEOUT_SECONDS`). 
+
+Live GitHub data requires `GITHUB_TOKEN` (the GraphQL API needs auth); without it the GitHub snapshot is `unavailable`. 
+
+Each adapter maps any failure (HTTP error, timeout, schema drift, blocked request) to an `unavailable` snapshot, so one platform failing degrades the card to `partial` instead of breaking it.
+
+> **Note:** solved.ac sits behind Cloudflare and may challenge requests from
+> datacenter IPs; when that happens the BOJ axis simply shows as unavailable.
+> LeetCode's endpoint is unofficial and treated as experimental.
+
+## Scoring
 
 Scores summarize **public activity** — not an absolute skill rating. 
 
@@ -71,6 +111,4 @@ overall = 0.30*openSource + 0.20*problemSolving + 0.20*depth
 
 Confidence is weighted across platforms (GitHub ×0.6 volume-weighted, solved.ac ×0.25, LeetCode ×0.15 discounted as experimental); 
 
-low confidence caps the tier so a GitHub-only profile tops out at Gold. 
-
-Tiers: `Seed → Bronze → Silver → Gold → Platinum → Diamond → Master → Maru`
+low confidence caps the tier so a GitHub-only profile tops out at Gold.

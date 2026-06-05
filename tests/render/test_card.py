@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 
 from codemaru.core.summary import build_summary
@@ -34,11 +35,17 @@ def test_card_is_wellformed_svg():
     assert 'viewBox="0 0 640 300"' in svg
 
 
-def test_card_has_no_external_images_or_scripts():
+def test_card_loads_no_external_subresources():
+    # The card must not pull external sub-resources (GitHub's image sandbox blocks
+    # them). The tier nameplate is inlined as a data: URI, and the only http(s)
+    # hrefs are the GitHub profile *link* on the handle — not resource loads.
     svg = render_card(_summary())
     assert "<script" not in svg
-    assert "<image" not in svg
-    assert 'href="http' not in svg
+    assert "<image" in svg  # nameplate is present...
+    assert 'href="data:image/png;base64,' in svg  # ...and inlined, not external
+    external = re.findall(r'href="(https?://[^"]+)"', svg)
+    assert external  # the handle link exists
+    assert all(url.startswith("https://github.com/") for url in external)
 
 
 def test_default_card_shows_all_five_axes():
@@ -60,11 +67,13 @@ def test_card_does_not_show_confidence():
     assert "confidence" not in render_card(_summary())
 
 
-def test_compact_renders_three_trophy_labels():
+def test_compact_renders_three_strength_badges():
     svg = render_card(_summary(), RenderOptions(compact=True))
     assert "TOP STRENGTHS" in svg
-    short = ["Open Src", "Impact", "Streak", "Solving", "Depth"]
+    short = ["Open Source", "Impact", "Consistency", "Solving", "Depth"]
     assert sum(1 for label in short if f">{label}<" in svg) == 3
+    # medal-tinted glyph tiles use per-rank gradient ids
+    assert "url(#tile-" in svg
 
 
 def test_malicious_handle_is_escaped():

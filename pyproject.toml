@@ -38,6 +38,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B"]
+# SVG-builder modules are dense f-string markup where hard-wrapping at 100 cols
+# hurts readability more than it helps.
+"codemaru/render/icons.py" = ["E501"]
+"codemaru/render/card.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
