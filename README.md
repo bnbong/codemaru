@@ -96,7 +96,7 @@ Each adapter maps any failure (HTTP error, timeout, schema drift, blocked reques
 
 Scores summarize **public activity** — not an absolute skill rating. 
 
-All scoring functions are pure; raw counts are never summed directly — unbounded counts use logarithmic saturation (`log1p(value)/log1p(saturation)`).
+All scoring functions are pure; raw counts are never summed directly — unbounded counts use logarithmic saturation, $\dfrac{\ln(1 + \text{value})}{\ln(1 + \text{saturation})}$, where `saturation` is the count at which the score reaches ~100.
 
 | Axis            | Signals (source)                                                |
 | --------------- | --------------------------------------------------------------- |

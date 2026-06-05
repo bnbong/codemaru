@@ -1,9 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "{templates,static,codemaru/render/assets}/**"
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": ["templates/**", "static/**", "codemaru/**"]
+      }
     }
-  }
+  ],
+  "routes": [{ "src": "/(.*)", "dest": "api/index.py" }]
 }
