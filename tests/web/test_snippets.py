@@ -34,6 +34,7 @@ def test_action_snippet_reflects_theme_and_compact():
         RenderOptions(theme=ThemeName.DARK, compact=True),
     )
     action = snippets["action"]
+    assert "uses: bnbong/codemaru@v1" in action
     assert "theme: dark" in action
     assert "compact: true" in action
     assert "boj: baek" in action

@@ -92,6 +92,57 @@ Each adapter maps any failure (HTTP error, timeout, schema drift, blocked reques
 > still blocked, the BOJ axis degrades to unavailable. LeetCode's endpoint is
 > unofficial and treated as experimental.
 
+## GitHub Action (static generation)
+
+Prefer not to depend on the hosted endpoint at render time? The **`bnbong/codemaru`**
+Action runs the same scoring/render pipeline inside your own repo's CI and commits
+a self-contained SVG. The card then loads straight from your repository — no live
+service call, immune to any outage, fully under your control. Refresh it on a
+schedule:
+
+```yaml
+name: Update codemaru card
+on:
+  schedule:
+    - cron: "0 3 * * *"   # daily, 03:00 UTC
+  workflow_dispatch:
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bnbong/codemaru@v1
+        with:
+          github: ${{ github.repository_owner }}
+          boj: your-solvedac-handle       # optional
+          leetcode: your-leetcode-handle  # optional
+          out: profile/codemaru.svg
+      - run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add profile/codemaru.svg
+          git commit -m "Update codemaru card" || exit 0
+          git push
+```
+
+Then embed the committed file: `![codemaru](profile/codemaru.svg)`.
+
+| Input          | Default                | Description                                  |
+| -------------- | ---------------------- | -------------------------------------------- |
+| `github`       | —  (required)          | GitHub username to summarize                 |
+| `boj`          | `""`                   | solved.ac / BOJ handle                       |
+| `leetcode`     | `""`                   | LeetCode handle                              |
+| `theme`        | `default`              | `default` \| `dark` \| `transparent`         |
+| `compact`      | `false`                | compact (tier-panel-only) layout             |
+| `out`          | `profile/codemaru.svg` | output path for the SVG                       |
+| `github-token` | `${{ github.token }}`  | token for reading public GitHub data         |
+
+The default workflow token reads your own public GitHub data; no extra secret is
+needed. The Action wraps the `codemaru generate` CLI (`codemaru generate --github
+<user> --out <path>`), so you can also run it locally with `uv run codemaru generate`.
+
 ## Scoring
 
 Scores summarize **public activity** — not an absolute skill rating. 

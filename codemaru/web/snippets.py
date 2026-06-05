@@ -8,9 +8,9 @@ from urllib.parse import urlencode
 from codemaru.models.input import ProfileInput
 from codemaru.models.render import RenderOptions, ThemeName
 
-# Whether the GitHub Action snippet's action actually exists yet. It ships in a
-# later phase, so the generator hides/marks it as coming soon until this is True.
-ACTION_AVAILABLE = False
+# The GitHub Action (bnbong/codemaru, defined by action.yml) is published, so the
+# generator shows the workflow snippet as a copyable, ready-to-use option.
+ACTION_AVAILABLE = True
 
 
 def build_card_query(profile: ProfileInput, options: RenderOptions) -> str:
@@ -66,7 +66,7 @@ def build_snippets(base_url: str, profile: ProfileInput, options: RenderOptions)
         "      contents: write\n"
         "    steps:\n"
         "      - uses: actions/checkout@v4\n"
-        "      - uses: codemaru/codemaru-action@v1\n"
+        "      - uses: bnbong/codemaru@v1\n"
         "        with:\n"
         f"{with_block}\n"
         "      - run: |\n"

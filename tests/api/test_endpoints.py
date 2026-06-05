@@ -92,8 +92,10 @@ def test_index_page_renders_demo_preview(client: TestClient):
     assert "text/html" in res.headers["content-type"]
     assert "codemaru" in res.text
     assert "/api/card.svg?github=codemaru-demo" in res.text
-    # GitHub Action snippet is hidden behind "coming soon" until it exists.
-    assert "coming soon" in res.text
+    # The GitHub Action snippet is published, so it's shown as copyable (no
+    # "coming soon" placeholder) and references the real action.
+    assert "coming soon" not in res.text
+    assert "bnbong/codemaru@v1" in res.text
 
 
 def test_index_no_js_form_fallback_shows_preview(client: TestClient):

@@ -1,6 +1,7 @@
 [project]
 name = "codemaru"
-version = "0.1.0"
+# Single source of truth: codemaru/__init__.py:__version__ (read by hatchling).
+dynamic = ["version"]
 description = "Render developer programming activity as an embeddable SVG card for GitHub profile READMEs"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -26,9 +27,16 @@ dev = [
     "mypy>=1.13.0",
 ]
 
+[project.scripts]
+# Static card generation, used by the GitHub Action (action.yml).
+codemaru = "codemaru.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "codemaru/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["codemaru"]
