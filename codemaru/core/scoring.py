@@ -22,7 +22,7 @@ from codemaru.models.snapshot import (
     SolvedAcSnapshot,
 )
 
-SCORE_VERSION = "0.1.0"
+SCORE_VERSION = "0.2.0"
 
 # Overall-score axis weights (mirrors the documented formula).
 AXIS_WEIGHTS: dict[Axis, float] = {
@@ -73,14 +73,24 @@ def _consistency(gh: GitHubSnapshot | None) -> float:
 
 
 def _problem_solving(sa: SolvedAcSnapshot | None, lc: LeetCodeSnapshot | None) -> float:
-    components: list[tuple[float, float]] = []
+    """Total problems solved across judges, summed then saturated once.
+
+    Counts are SUMMED (not averaged across platforms), so linking another judge
+    can only raise the score — a freshly created account with a handful of solves
+    never dilutes an established profile. Every solve is worth the same regardless
+    of platform; difficulty is handled separately by ``_depth``.
+    """
+    total = 0
+    has_judge = False
     if sa is not None and sa.usable:
-        components.append((log_score(sa.solved_count, 2500), 0.60))
+        total += sa.solved_count
+        has_judge = True
     if lc is not None and lc.usable:
-        total = lc.solved.easy + lc.solved.medium + lc.solved.hard
-        # LeetCode is experimental, so it carries less weight in the blend.
-        components.append((log_score(total, 1200), 0.40))
-    return weighted_average(components)
+        total += lc.solved.easy + lc.solved.medium + lc.solved.hard
+        has_judge = True
+    if not has_judge:
+        return 0.0
+    return log_score(total, 2500)
 
 
 def _depth(
@@ -88,17 +98,36 @@ def _depth(
     sa: SolvedAcSnapshot | None,
     lc: LeetCodeSnapshot | None,
 ) -> float:
+    """Problem-solving depth, combined across judges monotonically.
+
+    Rating evidence (BOJ tier vs LeetCode contest) is the BEST across judges
+    (max), hard-problem volume is SUMMED, and language breadth is a mild fallback.
+    So adding a judge never lowers depth — it can only confirm or raise it.
+    """
     components: list[tuple[float, float]] = []
+
+    # Rating evidence: take the strongest available, not the average. Add it only
+    # when there is real evidence (> 0); a zero rating would just dilute the rest.
+    ratings: list[float] = []
+    if sa is not None and sa.usable:
+        ratings.append(linear_score(sa.tier, 30))
+    if lc is not None and lc.usable and lc.contest_rating is not None and lc.contest_rating > 0:
+        ratings.append(linear_score(lc.contest_rating - 1200, 2000))
+    if ratings and max(ratings) > 0:
+        components.append((max(ratings), 0.35))
+
+    # Hard-problem volume, summed across judges (BOJ is difficulty-weighted).
+    # Skipped entirely when there is no hard evidence, so linking a fresh judge
+    # with zero hard solves never dilutes an existing depth signal.
+    hard = 0.0
     if sa is not None and sa.usable:
         d = sa.difficulty
-        # Difficulty-weighted solved count emphasizes hard problems.
-        hard = d.gold * 0.3 + d.platinum * 1 + d.diamond * 2 + d.ruby * 3
-        components.append((linear_score(sa.tier, 30), 0.35))
-        components.append((log_score(hard, 400), 0.35))
+        hard += d.gold * 0.3 + d.platinum * 1 + d.diamond * 2 + d.ruby * 3
     if lc is not None and lc.usable:
-        components.append((log_score(lc.solved.hard, 250), 0.20))
-        if lc.contest_rating and lc.contest_rating > 0:
-            components.append((linear_score(lc.contest_rating - 1200, 2000), 0.20))
+        hard += lc.solved.hard
+    if hard > 0:
+        components.append((log_score(hard, 400), 0.35))
+
     if gh is not None and gh.usable:
         # Language breadth is a mild depth signal when no judge data exists.
         components.append((log_score(gh.language_count, 12), 0.10))

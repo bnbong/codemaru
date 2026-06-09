@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from codemaru import __version__
 from codemaru.web.routes import router
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -16,7 +17,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="codemaru",
         description="Developer programming-activity summary cards for GitHub READMEs.",
-        version="0.1.0",
+        version=__version__,
     )
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
     app.include_router(router)

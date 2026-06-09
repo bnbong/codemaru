@@ -21,7 +21,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from codemaru.models.score import Axis, Tier
-from codemaru.render.fonts import CARD_MONO
+from codemaru.render.glyphs import MONO, text_path
 from codemaru.render.themes import RANK_TINTS, TIER_COLORS, TIER_GRADIENTS, hex_to_rgba
 from codemaru.render.xml import fmt_num
 
@@ -87,17 +87,21 @@ _TIER_LEVEL: dict[Tier, int] = {
     Tier.MARU: 7,
 }
 
-# Per level: frond reach (deg up the side), bottom-swash scale, sun-ray count,
-# ray fan span (deg), apex gem, side-sparkle count, swash/apex gem.
+# Per level: frond reach (deg up the side), bottom-swash scale, crown-spike count,
+# spike fan span (deg), apex gem, side-sparkle count, swash/apex gem.
+#
+# The crown spikes read as a rank crown: Gold starts at 3 and each tier above
+# adds exactly one (Platinum 4 → Maru 7). Below Gold there is no spike crown.
+# The fan span widens with the count so the per-spike spacing stays even.
 _ORNATE: list[dict[str, float | bool]] = [
     {"a1": 0, "swash": 0.0, "ray": 0, "span": 0, "apex": False, "spark": 0, "gem": False},
     {"a1": 150, "swash": 0.0, "ray": 0, "span": 0, "apex": False, "spark": 0, "gem": False},
     {"a1": 164, "swash": 0.70, "ray": 0, "span": 0, "apex": False, "spark": 0, "gem": False},
-    {"a1": 176, "swash": 0.85, "ray": 5, "span": 46, "apex": True, "spark": 0, "gem": True},
-    {"a1": 186, "swash": 0.95, "ray": 7, "span": 54, "apex": True, "spark": 0, "gem": True},
-    {"a1": 194, "swash": 1.00, "ray": 9, "span": 60, "apex": True, "spark": 2, "gem": True},
-    {"a1": 200, "swash": 1.05, "ray": 11, "span": 66, "apex": True, "spark": 2, "gem": True},
-    {"a1": 206, "swash": 1.12, "ray": 13, "span": 72, "apex": True, "spark": 3, "gem": True},
+    {"a1": 176, "swash": 0.85, "ray": 3, "span": 38, "apex": True, "spark": 0, "gem": True},
+    {"a1": 186, "swash": 0.95, "ray": 4, "span": 54, "apex": True, "spark": 0, "gem": True},
+    {"a1": 194, "swash": 1.00, "ray": 5, "span": 68, "apex": True, "spark": 2, "gem": True},
+    {"a1": 200, "swash": 1.05, "ray": 6, "span": 80, "apex": True, "spark": 2, "gem": True},
+    {"a1": 206, "swash": 1.12, "ray": 7, "span": 90, "apex": True, "spark": 3, "gem": True},
 ]
 
 
@@ -326,10 +330,18 @@ def tier_emblem(cx: float, cy: float, r: float, tier: Tier, overall: float, toke
         f'stroke="{hex_to_rgba(accent, 0.55)}" stroke-width="1" stroke-linejoin="round"/>'
         f'<circle cx="{fmt_num(cx)}" cy="{fmt_num(apex_y + 0.5)}" r="{fmt_num(r * 0.085)}" '
         'fill="#fff" fill-opacity="0.9"/>'
-        f'<text x="{fmt_num(cx)}" y="{fmt_num(cy + r * 0.215)}" text-anchor="middle" fill="#f4f8fc" '
-        f'font-size="{fmt_num(r * 0.62)}" font-weight="800" font-family="{CARD_MONO}" '
-        f'letter-spacing="-0.5">{round(overall)}</text>'
-        "</g>"
+        + text_path(
+            str(round(overall)),
+            family=MONO,
+            weight=800,
+            size=r * 0.62,
+            x=cx,
+            y=cy + r * 0.215,
+            anchor="middle",
+            fill="#f4f8fc",
+            letter_spacing=-0.5,
+        )
+        + "</g>"
     )
 
 

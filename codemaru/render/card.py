@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from codemaru.models.render import RenderOptions
 from codemaru.models.score import AXES, AXIS_LABELS, AXIS_SHORT_LABELS
 from codemaru.models.summary import CodemaruSummary
-from codemaru.render.fonts import CARD_MONO, CARD_SANS
+from codemaru.render.glyphs import MONO, SANS, defs_markup, glyph_defs, text_path, text_width
 from codemaru.render.icons import (
     gradient_defs,
     id_token,
@@ -28,7 +28,7 @@ from codemaru.render.icons import (
 )
 from codemaru.render.radar import polygon_points, ring_fractions, vertex
 from codemaru.render.themes import Theme, get_theme
-from codemaru.render.xml import escape_xml, fmt_num, safe_text
+from codemaru.render.xml import escape_xml, fmt_num, safe_text, truncate
 
 
 @dataclass(frozen=True)
@@ -133,30 +133,57 @@ def _tier_panel(summary: CodemaruSummary, layout: _Layout, theme: Theme, token: 
     scores = summary.scores
     cx = layout.panel_width / 2
     github = summary.input.github
-    handle = safe_text(github, 24 if layout.panel_width > 220 else 18)
+    handle = truncate(github, 24 if layout.panel_width > 220 else 18)
     href = escape_xml(f"https://github.com/{github}")
 
     emblem = tier_emblem(
         layout.emblem_cx, layout.emblem_cy, layout.emblem_r, scores.tier, scores.overall, token
     )
     name = tier_nameplate(cx, layout.tier_name_y, scores.tier, layout.panel_width - 30, 31)
-    caption = (
-        f'<text x="{fmt_num(cx)}" y="{fmt_num(layout.caption_y)}" text-anchor="middle" '
-        f'fill="{theme.muted}" font-size="9" letter-spacing="1.8" font-weight="500" '
-        f'font-family="{CARD_SANS}">TOP STRENGTHS</text>'
+    caption = text_path(
+        "TOP STRENGTHS",
+        family=SANS,
+        weight=500,
+        size=9,
+        x=cx,
+        y=layout.caption_y,
+        anchor="middle",
+        fill=theme.muted,
+        letter_spacing=1.8,
     )
     badges = _strength_badges(summary, layout, theme, token)
+    handle_text = f"@{handle}"
+    handle_w = text_width(handle_text, family=MONO, weight=500, size=12.5)
+    underline = (
+        f'<line x1="{fmt_num(cx - handle_w / 2)}" y1="{fmt_num(layout.handle_y + 2)}" '
+        f'x2="{fmt_num(cx + handle_w / 2)}" y2="{fmt_num(layout.handle_y + 2)}" '
+        f'stroke="{theme.text}" stroke-width="0.8"/>'
+    )
     handle_link = (
         f'<a href="{href}" xlink:href="{href}" target="_blank" rel="noopener noreferrer">'
-        f'<text x="{fmt_num(cx)}" y="{fmt_num(layout.handle_y)}" text-anchor="middle" '
-        f'fill="{theme.text}" font-size="12.5" font-weight="500" font-family="{CARD_MONO}" '
-        'text-decoration="underline">'
-        f"@{handle}</text></a>"
+        + text_path(
+            handle_text,
+            family=MONO,
+            weight=500,
+            size=12.5,
+            x=cx,
+            y=layout.handle_y,
+            anchor="middle",
+            fill=theme.text,
+        )
+        + underline
+        + "</a>"
     )
-    wordmark = (
-        f'<text x="{fmt_num(cx)}" y="{fmt_num(layout.wordmark_y)}" text-anchor="middle" '
-        f'fill="{theme.muted}" font-size="10" letter-spacing="2" font-weight="500" '
-        f'font-family="{CARD_SANS}">codemaru</text>'
+    wordmark = text_path(
+        "codemaru",
+        family=SANS,
+        weight=500,
+        size=10,
+        x=cx,
+        y=layout.wordmark_y,
+        anchor="middle",
+        fill=theme.muted,
+        letter_spacing=2,
     )
     return f"<g>{emblem}{name}{caption}{badges}{handle_link}{wordmark}</g>"
 
@@ -171,9 +198,16 @@ def _strength_badges(summary: CodemaruSummary, layout: _Layout, theme: Theme, to
         x = cx + offsets[i] * layout.trophy_spacing
         out.append(strength_badge(x, layout.trophy_cy, layout.trophy_scale, axis, i, token))
         out.append(
-            f'<text x="{fmt_num(x)}" y="{fmt_num(layout.trophy_label_y)}" text-anchor="middle" '
-            f'fill="{theme.muted}" font-size="8.5" font-weight="500" font-family="{CARD_SANS}">'
-            f"{safe_text(AXIS_SHORT_LABELS[axis], 14)}</text>"
+            text_path(
+                truncate(AXIS_SHORT_LABELS[axis], 14),
+                family=SANS,
+                weight=500,
+                size=8.5,
+                x=x,
+                y=layout.trophy_label_y,
+                anchor="middle",
+                fill=theme.muted,
+            )
         )
     return "".join(out)
 
@@ -199,9 +233,16 @@ def _radar(summary: CodemaruSummary, layout: _Layout, theme: Theme) -> str:
         spokes.append(
             f'<line x1="{fmt_num(cx)}" y1="{fmt_num(cy)}" x2="{fmt_num(tx)}" y2="{fmt_num(ty)}" '
             f'stroke="{theme.grid}" stroke-width="1"/>'
-            f'<text x="{fmt_num(lx)}" y="{fmt_num(ly)}" text-anchor="{anchor}" '
-            f'fill="{theme.muted}" font-size="10" font-weight="500" font-family="{CARD_SANS}">'
-            f"{safe_text(AXIS_LABELS[axis], 16)}</text>"
+            + text_path(
+                truncate(AXIS_LABELS[axis], 16),
+                family=SANS,
+                weight=500,
+                size=10,
+                x=lx,
+                y=ly,
+                anchor=anchor,
+                fill=theme.muted,
+            )
         )
 
     fractions = [summary.scores.axes.get(a) / 100 for a in AXES]
@@ -227,13 +268,27 @@ def _metrics_row(summary: CodemaruSummary, layout: _Layout, theme: Theme) -> str
     cells: list[str] = []
     for i, m in enumerate(metrics):
         x = start_x + step * i + step / 2
-        value = safe_text(m.value, 12)
-        label = safe_text(m.label, 12)
         cells.append(
-            f'<text x="{fmt_num(x)}" y="{fmt_num(y)}" text-anchor="middle" fill="{theme.text}" '
-            f'font-size="13" font-weight="600" font-family="{CARD_MONO}">{value}</text>'
-            f'<text x="{fmt_num(x)}" y="{fmt_num(y + 16)}" text-anchor="middle" '
-            f'fill="{theme.muted}" font-size="10" font-weight="500" font-family="{CARD_SANS}">{label}</text>'
+            text_path(
+                truncate(m.value, 12),
+                family=MONO,
+                weight=600,
+                size=13,
+                x=x,
+                y=y,
+                anchor="middle",
+                fill=theme.text,
+            )
+            + text_path(
+                truncate(m.label, 12),
+                family=SANS,
+                weight=500,
+                size=10,
+                x=x,
+                y=y + 16,
+                anchor="middle",
+                fill=theme.muted,
+            )
         )
     divider = (
         f'<line x1="{start_x}" y1="{fmt_num(y - 26)}" x2="{end_x}" y2="{fmt_num(y - 26)}" '
@@ -253,16 +308,33 @@ def _footer(summary: CodemaruSummary, layout: _Layout, theme: Theme) -> str:
     else:
         flag = ""
     x = layout.panel_width + 16
-    left = f"scoreVersion {safe_text(summary.scores.score_version, 10)} · {date}"
+    left = f"scoreVersion {truncate(summary.scores.score_version, 10)} · {date}"
     badge = (
-        f'<text x="{layout.width - 14}" y="{fmt_num(layout.footer_y)}" text-anchor="end" '
-        f'fill="{theme.muted}" font-size="9" font-weight="500" font-family="{CARD_SANS}">{flag}</text>'
+        text_path(
+            flag,
+            family=SANS,
+            weight=500,
+            size=9,
+            x=layout.width - 14,
+            y=layout.footer_y,
+            anchor="end",
+            fill=theme.muted,
+        )
         if flag
         else ""
     )
     return (
-        f'<text x="{x}" y="{fmt_num(layout.footer_y)}" fill="{theme.muted}" font-size="9" '
-        f'font-family="{CARD_MONO}">{left}</text>{badge}'
+        text_path(
+            left,
+            family=MONO,
+            weight=400,
+            size=9,
+            x=x,
+            y=layout.footer_y,
+            anchor="start",
+            fill=theme.muted,
+        )
+        + badge
     )
 
 
@@ -273,16 +345,17 @@ def render_card(summary: CodemaruSummary, options: RenderOptions | None = None) 
     theme = get_theme(opts.theme)
     token = id_token(f"{summary.input.github}:{summary.scores.tier.value}")
 
-    parts = [
-        gradient_defs(summary.scores.tier, token),
-        _background(layout, theme, token),
-        _tier_panel(summary, layout, theme, token),
-        _radar(summary, layout, theme),
-        _metrics_row(summary, layout, theme),
-        # Compact shows only the tier panel — no footer.
-        "" if opts.compact else _footer(summary, layout, theme),
-    ]
-    return _svg_document(layout, summary, "".join(parts))
+    with glyph_defs() as glyphs:
+        parts = [
+            gradient_defs(summary.scores.tier, token),
+            _background(layout, theme, token),
+            _tier_panel(summary, layout, theme, token),
+            _radar(summary, layout, theme),
+            _metrics_row(summary, layout, theme),
+            # Compact shows only the tier panel — no footer.
+            "" if opts.compact else _footer(summary, layout, theme),
+        ]
+    return _svg_document(layout, summary, defs_markup(glyphs) + "".join(parts))
 
 
 def render_error_card(message: str, options: RenderOptions | None = None) -> str:
@@ -291,16 +364,31 @@ def render_error_card(message: str, options: RenderOptions | None = None) -> str
     layout = _COMPACT if opts.compact else _DEFAULT
     theme = get_theme(opts.theme)
     fill = "none" if theme.bg == "transparent" else theme.bg
-    body = (
+    rect = (
         f'<rect x="0.5" y="0.5" width="{layout.width - 1}" height="{layout.height - 1}" '
         f'rx="10" fill="{fill}" stroke="{theme.border}"/>'
-        f'<text x="{layout.width / 2}" y="{layout.height / 2 - 8}" text-anchor="middle" '
-        f'fill="{theme.title}" font-size="16" font-weight="700" '
-        f'font-family="{CARD_SANS}">codemaru</text>'
-        f'<text x="{layout.width / 2}" y="{layout.height / 2 + 16}" text-anchor="middle" '
-        f'fill="{theme.muted}" font-size="12" font-family="{CARD_SANS}">{safe_text(message, 60)}</text>'
     )
-    return _svg_document(layout, None, body)
+    with glyph_defs() as glyphs:
+        text = text_path(
+            "codemaru",
+            family=SANS,
+            weight=700,
+            size=16,
+            x=layout.width / 2,
+            y=layout.height / 2 - 8,
+            anchor="middle",
+            fill=theme.title,
+        ) + text_path(
+            truncate(message, 60),
+            family=SANS,
+            weight=400,
+            size=12,
+            x=layout.width / 2,
+            y=layout.height / 2 + 16,
+            anchor="middle",
+            fill=theme.muted,
+        )
+    return _svg_document(layout, None, defs_markup(glyphs) + rect + text)
 
 
 def _svg_document(layout: _Layout, summary: CodemaruSummary | None, body: str) -> str:
