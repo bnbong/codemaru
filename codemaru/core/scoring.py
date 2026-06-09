@@ -106,26 +106,26 @@ def _depth(
     """
     components: list[tuple[float, float]] = []
 
-    # Rating evidence: take the strongest available, not the average.
+    # Rating evidence: take the strongest available, not the average. Add it only
+    # when there is real evidence (> 0); a zero rating would just dilute the rest.
     ratings: list[float] = []
     if sa is not None and sa.usable:
         ratings.append(linear_score(sa.tier, 30))
-    if lc is not None and lc.usable and lc.contest_rating and lc.contest_rating > 0:
+    if lc is not None and lc.usable and lc.contest_rating is not None and lc.contest_rating > 0:
         ratings.append(linear_score(lc.contest_rating - 1200, 2000))
-    if ratings:
+    if ratings and max(ratings) > 0:
         components.append((max(ratings), 0.35))
 
     # Hard-problem volume, summed across judges (BOJ is difficulty-weighted).
+    # Skipped entirely when there is no hard evidence, so linking a fresh judge
+    # with zero hard solves never dilutes an existing depth signal.
     hard = 0.0
-    has_judge = False
     if sa is not None and sa.usable:
         d = sa.difficulty
         hard += d.gold * 0.3 + d.platinum * 1 + d.diamond * 2 + d.ruby * 3
-        has_judge = True
     if lc is not None and lc.usable:
         hard += lc.solved.hard
-        has_judge = True
-    if has_judge:
+    if hard > 0:
         components.append((log_score(hard, 400), 0.35))
 
     if gh is not None and gh.usable:

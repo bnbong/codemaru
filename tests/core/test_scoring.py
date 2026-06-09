@@ -39,8 +39,10 @@ def test_linking_a_sparse_judge_never_lowers_score():
     # contest rating) must not dilute an established BOJ profile: cross-platform
     # aggregation is monotonic — more data only helps.
     base = SnapshotBundle(github=github_fixture(), solvedac=solvedac_fixture())
+    # A fresh account: a couple of easy solves, and no contest rating (None, as
+    # the real adapter reports it — not 0).
     sparse_lc = leetcode_fixture().model_copy(
-        update={"solved": LeetCodeSolved(easy=2, medium=0, hard=0), "contest_rating": 0}
+        update={"solved": LeetCodeSolved(easy=2, medium=0, hard=0), "contest_rating": None}
     )
     with_lc = base.model_copy(update={"leetcode": sparse_lc})
 
@@ -49,6 +51,18 @@ def test_linking_a_sparse_judge_never_lowers_score():
     assert w.axes.depth >= b.axes.depth
     assert w.overall >= b.overall
     assert TIERS.index(w.tier) >= TIERS.index(b.tier)
+
+
+def test_empty_judge_does_not_dilute_github_only_depth():
+    # A GitHub-only profile's depth comes entirely from language breadth. Linking
+    # a usable but empty judge (no hard solves, no contest rating) must not add a
+    # zero-valued component that dilutes it.
+    gh_only = SnapshotBundle(github=github_fixture())
+    empty_lc = leetcode_fixture().model_copy(
+        update={"solved": LeetCodeSolved(easy=0, medium=0, hard=0), "contest_rating": None}
+    )
+    with_lc = gh_only.model_copy(update={"leetcode": empty_lc})
+    assert score_bundle(with_lc).axes.depth >= score_bundle(gh_only).axes.depth
 
 
 def test_problem_solving_sums_across_judges():
