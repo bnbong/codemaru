@@ -5,6 +5,42 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-06-09
+
+### Changed
+
+- **Cross-platform scoring is now monotonic** (`scoreVersion` 0.2.0) — linking
+  another algorithm judge can no longer lower your tier. Problem Solving now
+  **sums** solved counts across judges (saturated once) instead of averaging
+  per-platform scores, and Depth takes the **best** rating (BOJ tier vs LeetCode
+  contest) with **summed** hard-problem volume, counting only platforms that
+  contribute positive evidence. A freshly created account no longer dilutes an
+  established profile.
+- **Tier crest crown** redesigned so the spike count reads as a rank: 3 at Gold,
+  +1 per tier up to 7 at Maru (no spikes below Gold).
+- **Card text is rendered as vector outlines** using bundled Space Grotesk /
+  JetBrains Mono (both OFL). GitHub renders README SVGs with web fonts disabled,
+  so text previously fell back to system fonts (inconsistent across macOS /
+  Windows); outlining bakes the designed fonts into the geometry so the card
+  looks identical everywhere. Repeated glyphs are de-duplicated via `<defs>`/
+  `<use>` to keep the SVG small.
+
+### Fixed
+
+- **Compact layout** no longer overlaps the `@handle` and the `codemaru`
+  wordmark (compact height 256 → 270).
+- **Handle underline** now matches the handle width exactly — fixed a
+  scale-rounding bug that mis-sized all outlined text and left a long trailing
+  underline.
+- **Version is single-sourced** from `__version__`: the FastAPI app version and
+  the adapter `User-Agent` no longer carry a hard-coded `0.1`.
+
+### Docs
+
+- Bilingual README (English / 한국어) with a language switcher; the API
+  reference and fixture/live-mode notes moved to `CONTRIBUTING.md`; added
+  theme, compact, and generator preview images.
+
 ## [1.0.0] - 2026-06-05
 
 First public release. codemaru turns a developer's public activity into a
@@ -47,4 +83,5 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
+[1.0.1]: https://github.com/bnbong/codemaru/compare/v1.0.1
 [1.0.0]: https://github.com/bnbong/codemaru/releases/tag/v1.0.0
