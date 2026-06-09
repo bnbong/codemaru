@@ -16,15 +16,21 @@ def escape_xml(text: str) -> str:
     )
 
 
-def safe_text(text: str, max_chars: int) -> str:
-    """Escape and hard-truncate a string so text never overflows its box.
+def truncate(text: str, max_chars: int) -> str:
+    """Hard-truncate a string (with an ellipsis) so it never overflows its box.
 
     ``max_chars`` is an approximate character cap (not pixel width) but adequate
-    for the fixed-width label slots on the card.
+    for the fixed-width label slots on the card. No XML escaping — use this when
+    the text is rendered as vector outlines (paths), not as ``<text>`` content.
     """
     if len(text) > max_chars:
         text = text[: max(0, max_chars - 1)] + "…"
-    return escape_xml(text)
+    return text
+
+
+def safe_text(text: str, max_chars: int) -> str:
+    """Escape and hard-truncate a string so text never overflows its box."""
+    return escape_xml(truncate(text, max_chars))
 
 
 def fmt_num(value: float) -> str:

@@ -50,14 +50,15 @@ def test_card_loads_no_external_subresources():
 
 def test_default_card_shows_all_five_axes():
     svg = render_card(_summary())
+    # Text is outlined to paths; the readable string lives in the group aria-label.
     for label in ["Open Source", "Impact", "Consistency", "Problem Solving", "Depth"]:
-        assert f">{label}<" in svg
+        assert f'aria-label="{label}"' in svg
 
 
 def test_compact_drops_radar_metrics_and_footer():
     svg = render_card(_summary(), RenderOptions(compact=True))
     assert 'viewBox="0 0 250 270"' in svg
-    assert ">Problem Solving<" not in svg
+    assert 'aria-label="Problem Solving"' not in svg
     assert "scoreVersion" not in svg
     assert "2026-05-31" not in svg
     assert 'fill="url(#emblem-' in svg
@@ -69,9 +70,9 @@ def test_card_does_not_show_confidence():
 
 def test_compact_renders_three_strength_badges():
     svg = render_card(_summary(), RenderOptions(compact=True))
-    assert "TOP STRENGTHS" in svg
+    assert 'aria-label="TOP STRENGTHS"' in svg
     short = ["Open Source", "Impact", "Consistency", "Solving", "Depth"]
-    assert sum(1 for label in short if f">{label}<" in svg) == 3
+    assert sum(1 for label in short if f'aria-label="{label}"' in svg) == 3
     # medal-tinted glyph tiles use per-rank gradient ids
     assert "url(#tile-" in svg
 

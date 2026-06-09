@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import httpx
 
+from codemaru import __version__
+
 # Some endpoints (notably solved.ac and LeetCode) reject requests without a
-# browser-like User-Agent.
-USER_AGENT = "codemaru/0.1 (+https://github.com/bnbong/codemaru)"
+# browser-like User-Agent. The version identifies this client in API logs.
+USER_AGENT = f"codemaru/{__version__} (+https://github.com/bnbong/codemaru)"
 
 
 def build_client(timeout: float) -> httpx.AsyncClient:
