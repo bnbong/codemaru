@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from starlette.background import BackgroundTask
 
 from codemaru.analytics import is_camo, record_embed, usage_count
 from codemaru.core.scoring import SCORE_VERSION
@@ -96,12 +97,21 @@ async def card_svg(
         return _error_card(str(exc), theme)
 
     svg = render_card(summary, options)
-    # Count real embeds only: a fetch from GitHub's image proxy means the card
-    # is rendered in someone's README. Best-effort — never blocks the response.
-    if is_camo(request.headers.get("user-agent")):
-        await record_embed(profile.github)
     body = svg.encode("utf-8")
-    return Response(body, media_type=_SVG_MEDIA, headers=_cache_headers(body))
+    # A fetch from GitHub's image proxy (Camo) means the card is really rendered
+    # in someone's README. For those: cache the response at the CDN (for viewers)
+    # and record the embed in the BACKGROUND — it runs after the body is flushed,
+    # so it never delays the response. Non-Camo hits (generator preview, opening
+    # the URL directly) are served `no-store` so they can't populate the shared
+    # CDN entry and shadow the Camo request that does the counting.
+    if is_camo(request.headers.get("user-agent")):
+        return Response(
+            body,
+            media_type=_SVG_MEDIA,
+            headers=_cache_headers(body),
+            background=BackgroundTask(record_embed, profile.github),
+        )
+    return Response(body, media_type=_SVG_MEDIA, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/api/summary.json")

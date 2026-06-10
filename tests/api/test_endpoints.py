@@ -18,12 +18,26 @@ def test_card_svg_valid(client: TestClient):
     assert res.text.startswith("<svg")
 
 
-def test_card_svg_cache_headers(client: TestClient):
-    res = client.get("/api/card.svg", params={"github": "octocat"})
+def test_card_svg_cache_headers_for_camo(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    async def _noop(handle: str) -> None:
+        return None
+
+    monkeypatch.setattr("codemaru.web.routes.record_embed", _noop)
+    res = client.get(
+        "/api/card.svg", params={"github": "octocat"}, headers={"User-Agent": "github-camo/x"}
+    )
     assert res.headers["cache-control"] == "public, max-age=300"
     assert "s-maxage=3600" in res.headers["cdn-cache-control"]
     assert "s-maxage=3600" in res.headers["vercel-cdn-cache-control"]
     assert res.headers["etag"]
+
+
+def test_card_svg_non_camo_is_not_cdn_cached(client: TestClient):
+    # Non-Camo requests (previews / direct opens) must not populate the shared
+    # CDN entry, or they would shadow the Camo request that does the counting.
+    res = client.get("/api/card.svg", params={"github": "octocat"})
+    assert res.headers["cache-control"] == "no-store"
+    assert "cdn-cache-control" not in res.headers
 
 
 def test_stats_badge_returns_shields_schema(client: TestClient, monkeypatch: pytest.MonkeyPatch):
@@ -57,7 +71,8 @@ def test_card_svg_records_embed_for_camo_requests(
         headers={"User-Agent": "github-camo/abc123"},
     )
     assert res.status_code == 200
-    assert recorded == ["octocat"]
+    assert recorded == ["octocat"]  # background task ran (TestClient awaits it)
+    assert "s-maxage=3600" in res.headers["cdn-cache-control"]  # cached for viewers
 
 
 def test_card_svg_skips_embed_for_non_camo_requests(
@@ -76,6 +91,7 @@ def test_card_svg_skips_embed_for_non_camo_requests(
     )
     assert res.status_code == 200
     assert recorded == []
+    assert res.headers["cache-control"] == "no-store"
 
 
 def test_card_svg_compact(client: TestClient):
