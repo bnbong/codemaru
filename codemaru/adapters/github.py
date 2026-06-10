@@ -93,6 +93,19 @@ def parse_repo_nodes(nodes: list[dict[str, Any]]) -> tuple[int, int, set[str]]:
     return stars, forks, languages
 
 
+def top_owned_repo(nodes: list[dict[str, Any]]) -> tuple[int, int]:
+    """Return (stars, forks) of the most-starred repo.
+
+    The live query already orders repos by stargazers desc, but we pick the max
+    defensively so the helper is correct regardless of input order (test
+    fixtures, future parser reuse).
+    """
+    if not nodes:
+        return 0, 0
+    top = max(nodes, key=lambda n: int(n.get("stargazerCount", 0)))
+    return int(top.get("stargazerCount", 0)), int(top.get("forkCount", 0))
+
+
 def _active_days_and_streak(calendar: dict[str, Any]) -> tuple[int, int]:
     """Count active days and the longest consecutive active-day streak."""
     counts: list[int] = []
@@ -121,6 +134,8 @@ def build_github_snapshot(
     followers: int,
     contrib: dict[str, Any],
     fetched_at: datetime,
+    top_repo_stars: int = 0,
+    top_repo_forks: int = 0,
     partial: bool = False,
     note: str | None = None,
 ) -> GitHubSnapshot:
@@ -149,6 +164,8 @@ def build_github_snapshot(
         active_days=active_days,
         longest_streak=longest_streak,
         language_count=len(languages),
+        top_owned_repo_stars=top_repo_stars,
+        top_owned_repo_forks=top_repo_forks,
     )
 
 
@@ -157,6 +174,7 @@ def parse_github(user: dict[str, Any], login: str, fetched_at: datetime) -> GitH
     repos = user.get("repositories", {})
     nodes = repos.get("nodes", []) or []
     stars, forks, languages = parse_repo_nodes(nodes)
+    top_stars, top_forks = top_owned_repo(nodes)
     return build_github_snapshot(
         login=user.get("login", login),
         repos_total=int(repos.get("totalCount", 0)),
@@ -166,6 +184,8 @@ def parse_github(user: dict[str, Any], login: str, fetched_at: datetime) -> GitH
         followers=int(user.get("followers", {}).get("totalCount", 0)),
         contrib=user.get("contributionsCollection", {}),
         fetched_at=fetched_at,
+        top_repo_stars=top_stars,
+        top_repo_forks=top_forks,
     )
 
 
@@ -197,7 +217,10 @@ async def fetch_github(
             return _unavailable(login, "user not found", fetched_at)
 
         repos = first.get("repositories", {})
-        stars, forks, languages = parse_repo_nodes(repos.get("nodes", []) or [])
+        first_nodes = repos.get("nodes", []) or []
+        stars, forks, languages = parse_repo_nodes(first_nodes)
+        # First page is ordered by stars desc, so its first node is the global top.
+        top_stars, top_forks = top_owned_repo(first_nodes)
         contrib = first.get("contributionsCollection", {})
         followers = int(first.get("followers", {}).get("totalCount", 0))
         repos_total = int(repos.get("totalCount", 0))
@@ -237,6 +260,8 @@ async def fetch_github(
             followers=followers,
             contrib=contrib,
             fetched_at=fetched_at,
+            top_repo_stars=top_stars,
+            top_repo_forks=top_forks,
             partial=partial,
             note=note,
         )

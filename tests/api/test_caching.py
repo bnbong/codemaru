@@ -6,10 +6,18 @@ from typing import Any
 import pytest
 
 from codemaru import service
+from codemaru.core.scoring import SCORE_VERSION
 from codemaru.models.input import ProfileInput
 from codemaru.models.snapshot import GitHubSnapshot, PlatformStatus, SolvedAcSnapshot
 
 _TS = datetime(2026, 5, 31, tzinfo=UTC)
+
+
+def test_cache_key_includes_score_version():
+    # Bumping SCORE_VERSION must change the cache key so a formula change can't
+    # serve summaries scored by the old engine.
+    key = service._cache_key(ProfileInput(github="octocat"))
+    assert f"v{SCORE_VERSION}" in key
 
 
 def _github() -> GitHubSnapshot:

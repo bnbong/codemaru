@@ -17,14 +17,21 @@ _SCORE_THRESHOLDS: list[tuple[Tier, float]] = [
     (Tier.SEED, 0),
 ]
 
-# Maximum tier permitted at a given confidence level, highest first.
+# Maximum tier permitted at a given confidence level, highest first. Calibrated
+# against the volume-weighted confidence in confidence.py:
+#   - A strong single-source profile (e.g. GitHub-only, confidence ~0.6) can now
+#     reach **Master** — deep activity in one domain is no longer capped at Gold.
+#   - **Maru** is reserved for an all-round, multi-platform "pentagon": its cap
+#     needs confidence only reachable with both substantial OSS *and* algorithm
+#     evidence (a single source can't get there).
 _CONFIDENCE_CAPS: list[tuple[Tier, float]] = [
-    (Tier.MARU, 0.90),
-    (Tier.DIAMOND, 0.80),
-    (Tier.PLATINUM, 0.65),
-    (Tier.GOLD, 0.50),
-    (Tier.SILVER, 0.35),
-    (Tier.BRONZE, 0.20),
+    (Tier.MARU, 0.85),
+    (Tier.MASTER, 0.55),
+    (Tier.DIAMOND, 0.45),
+    (Tier.PLATINUM, 0.35),
+    (Tier.GOLD, 0.25),
+    (Tier.SILVER, 0.15),
+    (Tier.BRONZE, 0.07),
     (Tier.SEED, 0.0),
 ]
 

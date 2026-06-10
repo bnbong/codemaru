@@ -6,7 +6,7 @@ import hashlib
 from pathlib import Path
 
 from fastapi import APIRouter, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.background import BackgroundTask
 
@@ -79,6 +79,12 @@ def health() -> JSONResponse:
             "scoreVersion": SCORE_VERSION,
         }
     )
+
+
+@router.get("/favicon.ico", include_in_schema=False)
+def favicon() -> RedirectResponse:
+    """Browsers auto-request /favicon.ico at the root; point it at the logo."""
+    return RedirectResponse("/static/codemaru_logo.png", status_code=308)
 
 
 @router.get("/api/card.svg")

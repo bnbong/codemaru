@@ -54,15 +54,49 @@ def test_linking_a_sparse_judge_never_lowers_score():
 
 
 def test_empty_judge_does_not_dilute_github_only_depth():
-    # A GitHub-only profile's depth comes entirely from language breadth. Linking
-    # a usable but empty judge (no hard solves, no contest rating) must not add a
-    # zero-valued component that dilutes it.
+    # A GitHub-only profile's depth comes from its representative project and
+    # language breadth (no judge pillar). Linking a usable but empty judge (no
+    # hard solves, no contest rating) must not pull that depth down.
     gh_only = SnapshotBundle(github=github_fixture())
     empty_lc = leetcode_fixture().model_copy(
         update={"solved": LeetCodeSolved(easy=0, medium=0, hard=0), "contest_rating": None}
     )
     with_lc = gh_only.model_copy(update={"leetcode": empty_lc})
     assert score_bundle(with_lc).axes.depth >= score_bundle(gh_only).axes.depth
+
+
+def test_sparse_leetcode_adds_no_confidence_and_no_tier_jump():
+    # The core fix: a freshly-made LeetCode account (a single solve) must add
+    # ~no confidence, so it can never bump the tier a step. (Old bug: presence
+    # alone added a flat 0.105 confidence, crossing a cap threshold.)
+    base = SnapshotBundle(github=github_fixture(), solvedac=solvedac_fixture())
+    sparse_lc = leetcode_fixture().model_copy(
+        update={"solved": LeetCodeSolved(easy=1, medium=0, hard=0), "contest_rating": None}
+    )
+    with_lc = base.model_copy(update={"leetcode": sparse_lc})
+
+    b, w = score_bundle(base), score_bundle(with_lc)
+    assert abs(w.confidence - b.confidence) < 0.005  # negligible
+    assert w.tier == b.tier  # no tier jump
+
+
+def test_substantial_leetcode_raises_confidence_and_score():
+    # A real solve history (the demo LeetCode fixture) should count.
+    base = SnapshotBundle(github=github_fixture(), solvedac=solvedac_fixture())
+    with_lc = base.model_copy(update={"leetcode": leetcode_fixture()})
+    b, w = score_bundle(base), score_bundle(with_lc)
+    assert w.confidence > b.confidence
+    assert w.axes.problem_solving >= b.axes.problem_solving
+
+
+def test_single_source_can_reach_master_but_not_maru():
+    # A strong single-source profile (GitHub-only confidence ~0.6) now caps at
+    # Master, not Gold; Maru is reserved for the multi-platform pentagon, whose
+    # confidence a single source cannot reach.
+    assert compute_tier(95, 0.50) is Tier.DIAMOND  # below the Master cap
+    assert compute_tier(95, 0.60) is Tier.MASTER  # single-source range -> Master
+    assert compute_tier(95, 0.84) is Tier.MASTER  # just below the Maru cap
+    assert compute_tier(95, 0.86) is Tier.MARU
 
 
 def test_problem_solving_sums_across_judges():
@@ -73,10 +107,77 @@ def test_problem_solving_sums_across_judges():
     assert score_bundle(both).axes.problem_solving >= score_bundle(boj_only).axes.problem_solving
 
 
+def test_scores_without_github_use_judges_only():
+    # A judge-only bundle (no GitHub) must score without error: GitHub-derived
+    # axes and the project-depth pillar are 0, so Depth comes from algorithms.
+    scores = score_bundle(SnapshotBundle(solvedac=solvedac_fixture()))
+    assert scores.axes.open_source == 0
+    assert scores.axes.impact == 0
+    assert scores.axes.consistency == 0
+    assert scores.axes.problem_solving > 0
+    assert scores.axes.depth > 0  # from the algorithmic pillar, project pillar is 0
+
+
 def test_github_only_has_no_problem_solving():
     scores = score_bundle(_github_only())
     assert scores.axes.problem_solving == 0
     assert scores.axes.open_source > 0
+
+
+def _gh_repo(stars: int, forks: int, langs: int):
+    return github_fixture().model_copy(
+        update={
+            "top_owned_repo_stars": stars,
+            "top_owned_repo_forks": forks,
+            "language_count": langs,
+        }
+    )
+
+
+def test_depth_rewards_a_flagship_project_without_judges():
+    # A hugely-starred owned project gives high Depth even with no judge data and
+    # few languages — depth via "built something significant" (the torvalds case).
+    flagship = _gh_repo(stars=180_000, forks=54_000, langs=2)
+    assert score_bundle(SnapshotBundle(github=flagship)).axes.depth >= 90
+
+
+def test_depth_not_inflated_by_language_breadth_alone():
+    # No flagship and no judges, just many languages => breadth only fills <=15%
+    # headroom, so a polyglot dabbler stays modest and never outranks a flagship.
+    dabbler = _gh_repo(stars=0, forks=0, langs=12)
+    flagship = _gh_repo(stars=180_000, forks=54_000, langs=2)
+    dabbler_depth = score_bundle(SnapshotBundle(github=dabbler)).axes.depth
+    assert dabbler_depth <= 16  # ~15 (breadth-only)
+    assert score_bundle(SnapshotBundle(github=flagship)).axes.depth > dabbler_depth
+
+
+def test_depth_high_from_strong_judges_without_a_project():
+    # Algorithm depth alone (no notable repo, one language) still yields high Depth.
+    gh = _gh_repo(stars=0, forks=0, langs=1)
+    bundle = SnapshotBundle(github=gh, solvedac=solvedac_fixture(), leetcode=leetcode_fixture())
+    assert score_bundle(bundle).axes.depth >= 90
+
+
+def test_confidence_credits_a_flagship_not_just_recent_activity():
+    # Low recent activity, but a hugely-starred owned project => confidence stays
+    # high (a significant flagship is verifiable evidence), so the tier cap isn't
+    # pinned low just because the profile is currently quiet.
+    quiet = github_fixture().model_copy(
+        update={
+            "total_commits": 5,
+            "total_pull_requests": 0,
+            "total_reviews": 0,
+            "active_days": 12,
+            "top_owned_repo_stars": 0,
+            "top_owned_repo_forks": 0,
+        }
+    )
+    flagship = quiet.model_copy(
+        update={"top_owned_repo_stars": 180_000, "top_owned_repo_forks": 54_000}
+    )
+    assert compute_confidence(SnapshotBundle(github=flagship)) > compute_confidence(
+        SnapshotBundle(github=quiet)
+    )
 
 
 def test_confidence_ordering():
@@ -118,9 +219,9 @@ def test_tier_boundaries():
 
 
 def test_low_confidence_caps_tier():
-    assert compute_tier(95, 0.3) is Tier.BRONZE
-    assert compute_tier(95, 0.55) is Tier.GOLD
-    assert compute_tier(95, 0.15) is Tier.SEED
+    assert compute_tier(95, 0.20) is Tier.SILVER
+    assert compute_tier(95, 0.30) is Tier.GOLD
+    assert compute_tier(95, 0.05) is Tier.SEED
 
 
 def test_top_axes_orders_by_score():

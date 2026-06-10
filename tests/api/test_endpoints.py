@@ -11,6 +11,12 @@ def test_health(client: TestClient):
     assert "scoreVersion" in body
 
 
+def test_favicon_redirects_to_logo(client: TestClient):
+    res = client.get("/favicon.ico", follow_redirects=False)
+    assert res.status_code in (307, 308)
+    assert res.headers["location"] == "/static/codemaru_logo.png"
+
+
 def test_card_svg_valid(client: TestClient):
     res = client.get("/api/card.svg", params={"github": "octocat", "boj": "baek"})
     assert res.status_code == 200

@@ -47,6 +47,11 @@ class GitHubSnapshot(_SnapshotBase):
     active_days: int = Field(ge=0, serialization_alias="activeDays")
     longest_streak: int = Field(ge=0, serialization_alias="longestStreak")
     language_count: int = Field(ge=0, serialization_alias="languageCount")
+    # The single most-starred owned (non-fork) repo — a "representative project"
+    # depth signal, distinct from total_stars (reach). Owner-only: an org-owned
+    # flagship (e.g. python/cpython) is not captured (public-data limitation).
+    top_owned_repo_stars: int = Field(default=0, ge=0, serialization_alias="topOwnedRepoStars")
+    top_owned_repo_forks: int = Field(default=0, ge=0, serialization_alias="topOwnedRepoForks")
 
 
 class DifficultyDistribution(BaseModel):

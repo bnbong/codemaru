@@ -5,11 +5,26 @@ import httpx
 import pytest
 
 from codemaru.adapters import github
-from codemaru.adapters.github import GITHUB_GRAPHQL_URL, fetch_github, parse_github
+from codemaru.adapters.github import (
+    GITHUB_GRAPHQL_URL,
+    fetch_github,
+    parse_github,
+    top_owned_repo,
+)
 from codemaru.models.snapshot import PlatformStatus
 from tests.adapters.fakes import FakeClient, FakeResponse
 
 _TS = datetime(2026, 5, 31, tzinfo=UTC)
+
+
+def test_top_owned_repo_picks_max_and_handles_empty():
+    assert top_owned_repo([]) == (0, 0)  # no repos
+    nodes = [
+        {"stargazerCount": 10, "forkCount": 2},
+        {"stargazerCount": 99, "forkCount": 40},  # the max, even if not first
+        {"stargazerCount": 50, "forkCount": 7},
+    ]
+    assert top_owned_repo(nodes) == (99, 40)
 
 
 def _user_payload() -> dict[str, Any]:
@@ -50,6 +65,9 @@ def test_parse_github_aggregates_fields():
     assert snap.language_count == 2  # Python, Go (None ignored)
     assert snap.active_days == 5
     assert snap.longest_streak == 3
+    # Repos are stars-desc, so the first node is the representative project.
+    assert snap.top_owned_repo_stars == 1000
+    assert snap.top_owned_repo_forks == 150
 
 
 async def test_fetch_github_ok_sends_auth_and_login_variable():
