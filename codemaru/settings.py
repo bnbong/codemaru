@@ -27,7 +27,12 @@ class Settings(BaseSettings):
     negative_cache_ttl_seconds: int = 60
     # How long a last-successful summary is retained for stale fallback.
     stale_ttl_seconds: int = 86400
-    adapter_timeout_seconds: float = 3.0
+    # Per-request read budget for live adapters. GitHub's GraphQL query is
+    # heavy for active accounts (many repos + a year of contributions): a single
+    # page can take 3-4s, so a tight 3s budget silently dropped such profiles to
+    # ``unavailable``. 8s gives headroom while staying under the serverless cap;
+    # pagination cost is bounded separately (repo-only follow-up pages).
+    adapter_timeout_seconds: float = 8.0
 
     redis_url: str | None = None
 

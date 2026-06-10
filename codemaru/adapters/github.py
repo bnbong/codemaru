@@ -59,6 +59,31 @@ query($login: String!, $cursor: String) {
 }
 """
 
+# Follow-up repo pages only need repositories — the (expensive) contributions
+# aggregation is fetched once on the first page, so re-querying it per page just
+# burns latency and GraphQL rate budget on multi-page profiles.
+_REPOS_QUERY = """
+query($login: String!, $cursor: String) {
+  user(login: $login) {
+    login
+    repositories(
+      first: 100
+      after: $cursor
+      ownerAffiliations: [OWNER]
+      isFork: false
+      orderBy: { field: STARGAZERS, direction: DESC }
+    ) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        stargazerCount
+        forkCount
+        primaryLanguage { name }
+      }
+    }
+  }
+}
+"""
+
 
 def _unavailable(login: str, note: str, fetched_at: datetime) -> GitHubSnapshot:
     return GitHubSnapshot(
@@ -201,10 +226,10 @@ async def fetch_github(
         return _unavailable(login, "GITHUB_TOKEN not configured", fetched_at)
     headers = {"Authorization": f"bearer {token}"}
 
-    async def _page(cursor: str | None) -> dict[str, Any] | None:
+    async def _page(cursor: str | None, *, query: str = _QUERY) -> dict[str, Any] | None:
         resp = await client.post(
             GITHUB_GRAPHQL_URL,
-            json={"query": _QUERY, "variables": {"login": login, "cursor": cursor}},
+            json={"query": query, "variables": {"login": login, "cursor": cursor}},
             headers=headers,
         )
         if resp.status_code != 200:
@@ -229,7 +254,7 @@ async def fetch_github(
         pages = 1
         page_failed = False
         while page_info.get("hasNextPage") and pages < MAX_REPO_PAGES:
-            nxt = await _page(page_info.get("endCursor"))
+            nxt = await _page(page_info.get("endCursor"), query=_REPOS_QUERY)
             if nxt is None:  # a later page failed — keep what we have
                 page_failed = True
                 break
