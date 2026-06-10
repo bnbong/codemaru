@@ -28,20 +28,40 @@ version-resolver:
     labels: ["patch", "bug", "fix", "chore", "documentation", "dependencies"]
   default: patch
 
-# Auto-apply labels to PRs from Conventional-Commit-style titles.
+# Auto-apply labels from the PR title. Two prefix styles are supported:
+#   - Conventional Commits — "feat:", "fix:", "docs:", ...
+#   - Bracket tags — "[FEAT]", "[FIX] ...", and comma-combos like "[FIX, DOCS]"
+#     (case-insensitive; each tag in the bracket applies its own label).
+# The bracket regex matches a tag as a whole word (\b) anywhere inside the
+# leading [...] block, so "[FIX, DOCS]" triggers both "bug" and "documentation".
 autolabeler:
   - label: "feature"
-    title: ["/^feat(\\(.*\\))?:/i"]
+    title:
+      - "/^feat(\\(.*\\))?:/i"
+      - "/^\\[[^\\]]*\\b(feat|feature)\\b[^\\]]*\\]/i"
   - label: "bug"
-    title: ["/^fix(\\(.*\\))?:/i"]
+    title:
+      - "/^fix(\\(.*\\))?:/i"
+      - "/^\\[[^\\]]*\\b(fix|bugfix|hotfix)\\b[^\\]]*\\]/i"
   - label: "documentation"
-    title: ["/^docs(\\(.*\\))?:/i"]
+    title:
+      - "/^docs(\\(.*\\))?:/i"
+      - "/^\\[[^\\]]*\\b(docs?|documentation)\\b[^\\]]*\\]/i"
   - label: "chore"
-    title: ["/^(chore|refactor|style|perf)(\\(.*\\))?:/i"]
+    title:
+      - "/^(chore|refactor|style|perf)(\\(.*\\))?:/i"
+      - "/^\\[[^\\]]*\\b(chore|refactor|style|perf)\\b[^\\]]*\\]/i"
   - label: "ci"
-    title: ["/^ci(\\(.*\\))?:/i"]
+    title:
+      - "/^ci(\\(.*\\))?:/i"
+      - "/^\\[[^\\]]*\\b(ci|build)\\b[^\\]]*\\]/i"
   - label: "tests"
-    title: ["/^test(\\(.*\\))?:/i"]
+    title:
+      - "/^test(\\(.*\\))?:/i"
+      - "/^\\[[^\\]]*\\b(tests?)\\b[^\\]]*\\]/i"
+  - label: "dependencies"
+    title:
+      - "/^\\[[^\\]]*\\b(deps?|dependencies)\\b[^\\]]*\\]/i"
 
 template: |
   ## What's Changed

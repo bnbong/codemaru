@@ -6,6 +6,8 @@ import pytest
 
 from codemaru.adapters import github
 from codemaru.adapters.github import (
+    _QUERY,
+    _REPOS_QUERY,
     GITHUB_GRAPHQL_URL,
     fetch_github,
     parse_github,
@@ -123,6 +125,13 @@ async def test_fetch_github_paginates_and_sums_all_pages():
     assert snap.public_repos == 150
     # second request used the first page's endCursor
     assert client.calls[1].json["variables"]["cursor"] == "CUR"
+    # Page 1 uses the full query (incl. the expensive contributionsCollection);
+    # follow-up pages use the lighter repos-only query so contributions aren't
+    # re-fetched per page. Guards against a refactor silently reverting to _QUERY.
+    assert client.calls[0].json["query"] == _QUERY
+    assert client.calls[1].json["query"] == _REPOS_QUERY
+    assert "contributionsCollection" in client.calls[0].json["query"]
+    assert "contributionsCollection" not in client.calls[1].json["query"]
     assert snap.status is PlatformStatus.OK  # all pages fetched
 
 
