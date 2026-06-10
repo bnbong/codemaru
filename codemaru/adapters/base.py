@@ -16,9 +16,14 @@ USER_AGENT = f"codemaru/{__version__} (+https://github.com/bnbong/codemaru)"
 
 
 def build_client(timeout: float) -> httpx.AsyncClient:
-    """Create an AsyncClient with a per-request timeout and default headers."""
+    """Create an AsyncClient with a per-request timeout and default headers.
+
+    ``timeout`` is the read budget (the slow part: GitHub's heavy GraphQL query).
+    Connect stays short so a dead host fails fast instead of burning the whole
+    budget on a stalled handshake.
+    """
     return httpx.AsyncClient(
-        timeout=httpx.Timeout(timeout),
+        timeout=httpx.Timeout(timeout, connect=min(timeout, 5.0)),
         headers={"User-Agent": USER_AGENT},
         follow_redirects=True,
     )
