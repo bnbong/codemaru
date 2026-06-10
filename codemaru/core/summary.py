@@ -43,12 +43,22 @@ def _build_metrics(bundle: SnapshotBundle) -> list[SupportingMetric]:
         metrics.append(
             SupportingMetric(key="boj", label="BOJ Tier", value=solvedac_tier_name(sa.tier))
         )
-        metrics.append(
-            SupportingMetric(key="solved", label="Solved", value=compact_number(sa.solved_count))
-        )
+
+    # "Solved" is the combined problem count across every usable judge — LeetCode
+    # (and future SWEA / Programmers) folds into this total rather than getting a
+    # separate metric, so the card stays platform-agnostic.
+    solved_total = 0
+    has_judge = False
+    if sa is not None and sa.usable:
+        solved_total += sa.solved_count
+        has_judge = True
     if lc is not None and lc.usable:
-        total = lc.solved.easy + lc.solved.medium + lc.solved.hard
-        metrics.append(SupportingMetric(key="lc", label="LeetCode", value=compact_number(total)))
+        solved_total += lc.solved.easy + lc.solved.medium + lc.solved.hard
+        has_judge = True
+    if has_judge:
+        metrics.append(
+            SupportingMetric(key="solved", label="Solved", value=compact_number(solved_total))
+        )
 
     return metrics[:6]
 

@@ -159,12 +159,14 @@ The Action wraps the `codemaru generate --github <user> --out <path>` CLI, so yo
 | Impact          | stars, forks, followers, public repos (GitHub)                  |
 | Consistency     | active days, longest streak (GitHub)                            |
 | Problem Solving | solved counts (solved.ac + LeetCode)                            |
-| Depth           | BOJ tier, hard-problem mix, LeetCode hard/contest, lang breadth |
+| Depth           | algorithmic depth (BOJ/LeetCode) **or** a standout owned project (top-repo stars/forks), + language breadth |
 
 ```
 overall (the number in the tier medallion) = 0.30*openSource + 0.20*problemSolving + 0.20*depth + 0.15*consistency + 0.15*impact
 ```
 
-Confidence is weighted across platforms (GitHub ×0.6 volume-weighted, solved.ac ×0.25, LeetCode ×0.15 discounted as experimental).
+Confidence scales with each platform's **verifiable solve volume** (not merely whether an account exists), weighted by source trust — so linking a brand-new account with a handful of solves never inflates your tier.
 
-Low confidence caps the tier, so a GitHub-only profile tops out at Gold.
+Low confidence caps the tier: a strong **single-source** profile (e.g. GitHub-only) can reach up to **Master**, while the top tier **Maru** is reserved for an all-round, multi-platform *pentagon* — deep across both open-source and algorithm activity.
+
+> For the full method with a real, step-by-step worked example, see [docs/SCORING.md](docs/SCORING.md).

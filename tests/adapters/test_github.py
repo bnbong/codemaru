@@ -50,6 +50,9 @@ def test_parse_github_aggregates_fields():
     assert snap.language_count == 2  # Python, Go (None ignored)
     assert snap.active_days == 5
     assert snap.longest_streak == 3
+    # Repos are stars-desc, so the first node is the representative project.
+    assert snap.top_owned_repo_stars == 1000
+    assert snap.top_owned_repo_forks == 150
 
 
 async def test_fetch_github_ok_sends_auth_and_login_variable():

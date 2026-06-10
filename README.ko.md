@@ -159,12 +159,14 @@ jobs:
 | Impact          | 스타, 포크, 팔로워, 공개 repo (GitHub)                          |
 | Consistency     | 활동한 날, 최장 연속 기록 (GitHub)                              |
 | Problem Solving | 푼 문제 수 (solved.ac + LeetCode)                               |
-| Depth           | 백준 티어, 어려운 문제 비중, LeetCode hard/콘테스트, 언어 다양성 |
+| Depth           | 알고리즘 깊이(BOJ/LeetCode) **또는** 대표 프로젝트(소유 repo 최다 stars/forks), + 언어 다양성 |
 
 ```
 점수 계산(티어 가운데 표시된 숫자) = 0.30*openSource + 0.20*problemSolving + 0.20*depth + 0.15*consistency + 0.15*impact
 ```
 
-신뢰도(confidence)는 플랫폼별로 가중됩니다(GitHub ×0.6 볼륨 가중, solved.ac ×0.25, LeetCode는 실험적이라 ×0.15로 할인).
+신뢰도(confidence)는 각 플랫폼의 **검증 가능한 풀이량**(플랫폼 별 계정 존재 여부X)에 비례하며, 출처 신뢰도로 가중됩니다. 그래서 방금 만든 몇 문제짜리 계정을 연결해도 티어가 부풀려지지 않습니다.
 
-신뢰도가 낮으면 티어에 상한이 걸려, GitHub만 있는 프로필은 Gold 티어가 최고 티어가 됩니다.
+신뢰도가 낮으면 티어 상한이 걸립니다. 한 분야가 강한 **단일 출처** 프로필(예: GitHub만)도 **Master**까지 도달할 수 있고, 최고 티어인 **Maru**는 오픈소스와 알고리즘 양쪽 모두 깊은 **멀티플랫폼 오각형** 역량을 갖춘 경우에만 주어집니다.
+
+> 점수 계산 방식의 자세한 설명과 실제 프로필 단계별 예시는 [docs/SCORING.md](docs/SCORING.md)를 참고하세요.

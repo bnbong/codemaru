@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Scoring overhaul (`SCORE_VERSION` → `0.3.0`).** A batch of fairness fixes to
+  how profiles are ranked:
+  - *Confidence* now scales with each platform's **verifiable solve volume**
+    (weighted by source trust), not mere account presence — so linking a
+    brand-new judge account with a handful of solves no longer bumps the tier.
+    GitHub confidence also credits a standout owned project, so a historically
+    significant flagship isn't capped low just for being recently quiet.
+  - *Tier caps* gained a distinct **Master** step and were re-tuned: a strong
+    **single-source** profile (e.g. GitHub-only) can now reach up to **Master**,
+    while the top tier **Maru** is reserved for an all-round, multi-platform
+    *pentagon* (deep across both open-source and algorithm activity).
+  - *Open Source* weights commits and contributed repos most (0.40 / 0.20) and
+    leans less on PRs/reviews/issues, so a prolific direct-commit maintainer who
+    rarely opens PRs isn't scored into the ground.
+  - *Depth* is redesigned into three pillars — algorithmic depth (judges), a
+    **representative-project** signal (the most-starred *owned* repo, a new
+    snapshot field), and technical breadth — combined so deep algorithms **or**
+    one significant built project can carry it (breadth only fills ≤15% of the
+    headroom). Org-owned flagships (e.g. `python/cpython`) aren't attributed —
+    a known public-data limitation.
+- **Card metrics: LeetCode folded into a combined "Solved".** The standalone
+  LeetCode metric is removed; "Solved" is now the total problems solved across
+  all judges (BOJ + LeetCode, and future platforms). LeetCode still feeds the
+  scores. The Solved metric shows even for a LeetCode-only profile.
+
 ### Added
 
 - **Adoption tracking + README badge.** A new `GET /api/stats/badge` shields.io
