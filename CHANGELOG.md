@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-06-10
 
 ### Changed
 
@@ -43,6 +43,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SCARD`. Best-effort: without `KV_REST_API_URL` / `KV_REST_API_TOKEN` (local /
   CI) tracking is a no-op and a failing KV never affects card rendering. Only the
   public, lower-cased handle is stored — no viewer IPs/headers.
+
+### Fixed
+
+- **High-activity GitHub profiles no longer drop to "unavailable".** The live
+  adapter's per-request read timeout (3s) was too tight for accounts whose
+  GraphQL query is heavy (many repos plus a year of contributions): the first
+  page alone could take 3–4s, time out, and degrade the whole card to a
+  GitHub-less `partial`. The read budget is raised to 8s (connect stays short so
+  a dead host still fails fast), and follow-up repository pages now use a
+  lighter repos-only query that doesn't re-fetch the expensive contribution
+  aggregation — bounding multi-page cost so it stays within the serverless limit.
 
 ## [1.0.1] - 2026-06-09
 
@@ -122,6 +133,6 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
-[Unreleased]: https://github.com/bnbong/codemaru/compare/v1.0.1...HEAD
+[1.1.0]: https://github.com/bnbong/codemaru/compare/v1.1.0
 [1.0.1]: https://github.com/bnbong/codemaru/compare/v1.0.1
 [1.0.0]: https://github.com/bnbong/codemaru/releases/tag/v1.0.0
