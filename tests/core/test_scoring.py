@@ -107,6 +107,17 @@ def test_problem_solving_sums_across_judges():
     assert score_bundle(both).axes.problem_solving >= score_bundle(boj_only).axes.problem_solving
 
 
+def test_scores_without_github_use_judges_only():
+    # A judge-only bundle (no GitHub) must score without error: GitHub-derived
+    # axes and the project-depth pillar are 0, so Depth comes from algorithms.
+    scores = score_bundle(SnapshotBundle(solvedac=solvedac_fixture()))
+    assert scores.axes.open_source == 0
+    assert scores.axes.impact == 0
+    assert scores.axes.consistency == 0
+    assert scores.axes.problem_solving > 0
+    assert scores.axes.depth > 0  # from the algorithmic pillar, project pillar is 0
+
+
 def test_github_only_has_no_problem_solving():
     scores = score_bundle(_github_only())
     assert scores.axes.problem_solving == 0
