@@ -17,6 +17,7 @@ GET /                  # server-rendered generator (live preview + copy snippets
 GET /api/card.svg      # image/svg+xml
 GET /api/summary.json  # application/json
 GET /api/health        # liveness + scoreVersion
+GET /api/stats/badge   # shields.io endpoint badge: distinct embedded users
 ```
 
 Query params: `github` (required), `boj`, `leetcode`, `theme` (`default`|`dark`|`transparent`), `compact` (`true`/`false`).
@@ -66,6 +67,9 @@ from CI; default tests use fixtures and need no network or secrets.
 - The radar is always 5 axes; confidence is never drawn on the card (it lives in
   `summary.json` and caps the tier).
 - Change any scoring formula → bump `SCORE_VERSION` and update the tests.
+- Adoption tracking (`codemaru/analytics.py`) is best-effort: it must never block
+  or break card rendering, and is a no-op locally (no secrets needed to develop
+  or test).
 - Keep PRs small and focused.
 
 ## PRs & labels
