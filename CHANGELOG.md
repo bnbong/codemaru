@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Adoption tracking + README badge.** A new `GET /api/stats/badge` shields.io
+  endpoint reports how many distinct developers have embedded a codemaru card.
+  Card requests coming from GitHub's image proxy (Camo) — real README embeds —
+  record the handle in a Vercel KV (Upstash Redis) set; the badge shows the
+  `SCARD`. Best-effort: without `KV_REST_API_URL` / `KV_REST_API_TOKEN` (local /
+  CI) tracking is a no-op and a failing KV never affects card rendering. Only the
+  public, lower-cased handle is stored — no viewer IPs/headers.
+
 ## [1.0.1] - 2026-06-09
 
 ### Changed
@@ -83,5 +95,6 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
+[Unreleased]: https://github.com/bnbong/codemaru/compare/v1.0.1...HEAD
 [1.0.1]: https://github.com/bnbong/codemaru/compare/v1.0.1
 [1.0.0]: https://github.com/bnbong/codemaru/releases/tag/v1.0.0

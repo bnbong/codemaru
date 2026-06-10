@@ -31,6 +31,14 @@ class Settings(BaseSettings):
 
     redis_url: str | None = None
 
+    # Vercel KV (Upstash Redis) REST credentials for best-effort adoption
+    # tracking. Absent locally / in CI, so tracking degrades to a no-op.
+    kv_rest_api_url: str | None = None
+    kv_rest_api_token: str | None = None
+    # Timeout for the (best-effort) KV calls. Kept short so analytics never
+    # delays card rendering; tune up if the KV region is far from the function.
+    analytics_timeout_seconds: float = 0.8
+
 
 @lru_cache
 def get_settings() -> Settings:

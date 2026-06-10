@@ -10,6 +10,9 @@
 <a href="https://codecov.io/gh/bnbong/codemaru" >
  <img src="https://codecov.io/gh/bnbong/codemaru/graph/badge.svg?token=A7B1BHUtSm"/>
  </a>
+<a href="https://codemaru.bnbong.com">
+ <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fcodemaru.bnbong.com%2Fapi%2Fstats%2Fbadge" alt="codemaru users"/>
+ </a>
 </p>
 <p align="center">
   <a href="README.md">English</a> · <b>한국어</b>

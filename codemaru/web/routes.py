@@ -9,10 +9,13 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
+from codemaru.analytics import is_camo, record_embed, usage_count
 from codemaru.core.scoring import SCORE_VERSION
 from codemaru.fixtures.demo import DEMO_INPUT
 from codemaru.models.render import RenderOptions, ThemeName
+from codemaru.models.score import Tier
 from codemaru.render import render_card, render_error_card
+from codemaru.render.themes import TIER_COLORS
 from codemaru.service import LiveDataUnavailableError, effective_mode, get_summary
 from codemaru.settings import get_settings
 from codemaru.web.query import QueryError, parse_request
@@ -25,6 +28,9 @@ router = APIRouter()
 
 _SVG_MEDIA = "image/svg+xml; charset=utf-8"
 _JSON_MEDIA = "application/json; charset=utf-8"
+
+# Adoption badge tint — the Maru (top tier) accent, as a shields hex (no '#').
+_BADGE_COLOR = TIER_COLORS[Tier.MARU].lstrip("#")
 
 
 def _cache_headers(body: bytes) -> dict[str, str]:
@@ -90,6 +96,10 @@ async def card_svg(
         return _error_card(str(exc), theme)
 
     svg = render_card(summary, options)
+    # Count real embeds only: a fetch from GitHub's image proxy means the card
+    # is rendered in someone's README. Best-effort — never blocks the response.
+    if is_camo(request.headers.get("user-agent")):
+        await record_embed(profile.github)
     body = svg.encode("utf-8")
     return Response(body, media_type=_SVG_MEDIA, headers=_cache_headers(body))
 
@@ -112,6 +122,25 @@ async def summary_json(
 
     body = summary.model_dump_json(by_alias=True).encode("utf-8")
     return Response(body, media_type=_JSON_MEDIA, headers=_cache_headers(body))
+
+
+@router.get("/api/stats/badge")
+async def stats_badge() -> JSONResponse:
+    """A shields.io endpoint badge: distinct developers who embedded a card.
+
+    Use in a README via
+    ``https://img.shields.io/endpoint?url=<this URL>``.
+    """
+    count = await usage_count()
+    cdn = "public, s-maxage=600, stale-while-revalidate=3600"
+    return JSONResponse(
+        {"schemaVersion": 1, "label": "users", "message": str(count), "color": _BADGE_COLOR},
+        headers={
+            "Cache-Control": "public, max-age=60",
+            "CDN-Cache-Control": cdn,
+            "Vercel-CDN-Cache-Control": cdn,
+        },
+    )
 
 
 @router.get("/", response_class=HTMLResponse)

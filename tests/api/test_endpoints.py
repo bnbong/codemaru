@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -23,6 +24,58 @@ def test_card_svg_cache_headers(client: TestClient):
     assert "s-maxage=3600" in res.headers["cdn-cache-control"]
     assert "s-maxage=3600" in res.headers["vercel-cdn-cache-control"]
     assert res.headers["etag"]
+
+
+def test_stats_badge_returns_shields_schema(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    from codemaru import analytics
+
+    monkeypatch.setattr(analytics, "_credentials", lambda: None)  # no KV -> 0
+    res = client.get("/api/stats/badge")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["schemaVersion"] == 1
+    assert data["label"] == "users"
+    assert data["message"] == "0"
+    assert data["color"] == "f778ba"  # Maru tier accent
+    # CDN cache headers (mirrors the card endpoint) so shields/Vercel cache it.
+    assert "s-maxage=600" in res.headers["cdn-cache-control"]
+    assert "s-maxage=600" in res.headers["vercel-cdn-cache-control"]
+
+
+def test_card_svg_records_embed_for_camo_requests(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    recorded: list[str] = []
+
+    async def _spy(handle: str) -> None:
+        recorded.append(handle)
+
+    monkeypatch.setattr("codemaru.web.routes.record_embed", _spy)
+    res = client.get(
+        "/api/card.svg",
+        params={"github": "octocat"},
+        headers={"User-Agent": "github-camo/abc123"},
+    )
+    assert res.status_code == 200
+    assert recorded == ["octocat"]
+
+
+def test_card_svg_skips_embed_for_non_camo_requests(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    recorded: list[str] = []
+
+    async def _spy(handle: str) -> None:
+        recorded.append(handle)
+
+    monkeypatch.setattr("codemaru.web.routes.record_embed", _spy)
+    res = client.get(
+        "/api/card.svg",
+        params={"github": "octocat"},
+        headers={"User-Agent": "Mozilla/5.0 (preview)"},
+    )
+    assert res.status_code == 200
+    assert recorded == []
 
 
 def test_card_svg_compact(client: TestClient):
