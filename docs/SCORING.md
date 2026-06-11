@@ -18,7 +18,7 @@ data completeness  →  confidence      →  cap  ────┘
 
 1. Each **axis** is a weighted average of a few **signals** (raw counts).
 2. The five axes blend into one **overall** score (0–100).
-3. **Confidence** (0–1) measures how much *verifiable* data we have; it never appears on the card but **caps** the maximum tier.
+3. **Confidence** (0–1) measures how much *verifiable* data we have it never appears on the card but **caps** the maximum tier.
 4. The final **tier** is the lower of the score-based tier and the confidence cap.
 
 Before the example, two building blocks explain the "magic" arrows like `386 → 78.4`.
@@ -29,18 +29,18 @@ A raw count (386 commits, 72 stars, …) can't be used directly: it's unbounded,
 
 **`logScore`** (for unbounded counts — commits, stars, solved problems):
 
-$$\mathrm{logScore}(v,\,s) \;=\; \min\!\left(100,\; \frac{\ln(1+v)}{\ln(1+s)}\times 100\right)$$
+$$\mathrm{logScore}(v,s) = \min\left(100, \frac{\ln(1+v)}{\ln(1+s)}\times 100\right)$$
 
 - $v$ = the raw value, $s$ = the **saturation** (the value at which the score reaches ~100). A larger $s$ means the score grows more slowly.
 - Worked example — commits, with saturation $s = 2000$:
 
-$$\mathrm{logScore}(386,\,2000)=\frac{\ln(387)}{\ln(2001)}\times 100=\frac{5.96}{7.60}\times 100\approx \mathbf{78.4}$$
+$$\mathrm{logScore}(386,2000)=\frac{\ln(387)}{\ln(2001)}\times 100=\frac{5.96}{7.60}\times 100\approx \mathbf{78.4}$$
 
   That is the `386 → 78.4` step: 386 commits, normalized with a saturation of 2000, is worth **78.4 out of 100**.
 
 **`linScore`** (for values that already have a natural maximum — e.g. active days out of 365):
 
-$$\mathrm{linScore}(v,\,m) \;=\; \min\!\left(100,\; \frac{v}{m}\times 100\right)$$
+$$\mathrm{linScore}(v,m) = \min\left(100, \frac{v}{m}\times 100\right)$$
 
   e.g. 127 active days out of $m = 365$ → $\frac{127}{365}\times100 \approx 34.8$.
 
@@ -50,10 +50,10 @@ Each axis takes several normalized signals and averages them by importance (**we
 
 For signals $s_i$ with weights $w_i$:
 
-$$\text{axis} \;=\; \frac{\sum_i s_i \times w_i}{\sum_i w_i}$$
+$$\text{axis} = \frac{\sum_i s_i \times w_i}{\sum_i w_i}$$
 
 > **Notation:** `×` always means **multiply**. In the tables below, each signal
-> is its own row; the **contribution** column is simply `score × weight`. The
+> is its own row the **contribution** column is simply `score × weight`. The
 > axis score is the sum of the contributions (the weights here add up to 1, so
 > there's no extra division).
 
@@ -109,7 +109,7 @@ $$\text{Consistency}=20.9+2.0=\mathbf{22.9}$$
 
 Solved counts are **summed across all judges first**, then normalized once — so linking another judge can only raise the score, never dilute it:
 
-$$\text{ProblemSolving}=\mathrm{logScore}(\underbrace{229}_{\text{BOJ}}+\underbrace{2}_{\text{LeetCode}},\;2500)=\mathrm{logScore}(231,\,2500)\approx\mathbf{69.6}$$
+$$\text{ProblemSolving}=\mathrm{logScore}(\underbrace{229}_{\text{BOJ}}+\underbrace{2}_{\text{LeetCode}},2500)=\mathrm{logScore}(231,2500)\approx\mathbf{69.6}$$
 
 ### Depth (axis weight 0.20)
 
@@ -135,11 +135,11 @@ $$P_{\text{algo}}=20.0+11.6=\mathbf{31.6}$$
 
 $$P_{\text{project}}=29.8+4.7=\mathbf{34.5}$$
 
-**Breadth bonus** — language count, normalized: $\mathrm{logScore}(12,\,12)=100$.
+**Breadth bonus** — language count, normalized: $\mathrm{logScore}(12,12)=100$.
 
 The two pillars combine as a **max** (either alone can reach 100), and breadth only fills the *leftover headroom* (at most +15%), so a weak signal never drags a strong one down:
 
-$$\text{primary}=\max(P_{\text{algo}},\,P_{\text{project}})=\max(31.6,\,34.5)=34.5$$
+$$\text{primary}=\max(P_{\text{algo}},P_{\text{project}})=\max(31.6,34.5)=34.5$$
 
 $$\text{Depth}=\text{primary}+(100-\text{primary})\times 0.15\times\frac{\text{breadth}}{100}=34.5+(100-34.5)\times 0.15\times 1.0\approx\mathbf{44.3}$$
 
@@ -147,7 +147,7 @@ $$\text{Depth}=\text{primary}+(100-\text{primary})\times 0.15\times\frac{\text{b
 
 Blend the five axes by their weights:
 
-$$\text{overall}=0.30\,O+0.20\,P+0.20\,D+0.15\,C+0.15\,I$$
+$$\text{overall}=0.30O+0.20P+0.20D+0.15C+0.15I$$
 
 $$=0.30(61.8)+0.20(69.6)+0.20(44.3)+0.15(22.9)+0.15(55.3)=\mathbf{53.0}$$
 
@@ -157,19 +157,19 @@ Confidence asks "*how much trustworthy data do we actually have?*" Each platform
 
 For a judge, the factor uses a small "free" threshold of 10 solves — the first handful of solves count as zero, so an empty account can't inflate the tier:
 
-$$f_{\text{judge}}=\text{trust}\times\frac{\mathrm{logScore}\big(\max(0,\ \text{solved}-10),\ s\big)}{100}$$
+$$f_{\text{judge}}=\text{trust}\times\frac{\mathrm{logScore}\big(\max(0, \text{solved}-10), s\big)}{100}$$
 
 - GitHub factor — the **stronger of** recent activity *or* a standout owned project (for bnbong, recent activity dominates): $f_{\text{gh}} = 0.979$
-- solved.ac factor: trust $1.0$, $\mathrm{logScore}(229-10,\,2200)/100 \Rightarrow f_{\text{solvedac}} = 0.701$
-- LeetCode factor: only 2 solves, and $\max(0,\,2-10)=0$, so $f_{\text{leetcode}} = 0$
+- solved.ac factor: trust $1.0$, $\mathrm{logScore}(229-10,2200)/100 \Rightarrow f_{\text{solvedac}} = 0.701$
+- LeetCode factor: only 2 solves, and $\max(0,2-10)=0$, so $f_{\text{leetcode}} = 0$
 
-$$\text{confidence}=0.6\,f_{\text{gh}}+0.25\,f_{\text{solvedac}}+0.15\,f_{\text{leetcode}}=0.6(0.979)+0.25(0.701)+0=\mathbf{0.763}$$
+$$\text{confidence}=0.6f_{\text{gh}}+0.25f_{\text{solvedac}}+0.15f_{\text{leetcode}}=0.6(0.979)+0.25(0.701)+0=\mathbf{0.763}$$
 
 A confidence of **0.763** opens the cap up to **Master**.
 
 ### Final tier
 
-$$\text{tier}=\min(\underbrace{\text{Gold}}_{\text{score }53.0\,\in\,[45,58)},\ \underbrace{\text{Master}}_{\text{confidence cap}})=\textbf{Gold}$$
+$$\text{tier}=\min(\underbrace{\text{Gold}}_{\text{score }53.0\in[45,58)}, \underbrace{\text{Master}}_{\text{confidence cap}})=\textbf{Gold}$$
 
 The overall score (53.0) lands in the Gold band, and the confidence cap (Master) is higher, so it doesn't pull the tier down. **bnbong → Gold.**
 
@@ -219,18 +219,18 @@ The overall score (53.0) lands in the Gold band, and the confidence cap (Master)
 
 **`logScore`** (상한 없는 카운트 — 커밋, stars, 푼 문제 수):
 
-$$\mathrm{logScore}(v,\,s) \;=\; \min\!\left(100,\; \frac{\ln(1+v)}{\ln(1+s)}\times 100\right)$$
+$$\mathrm{logScore}(v,s) = \min\left(100, \frac{\ln(1+v)}{\ln(1+s)}\times 100\right)$$
 
 - $v$ = 원시값, $s$ = **포화(saturation)** 기준(점수가 ~100에 도달하는 값). $s$가 클수록 점수가 더 천천히 오릅니다.
 - 예시 — 커밋, 포화 $s = 2000$:
 
-$$\mathrm{logScore}(386,\,2000)=\frac{\ln(387)}{\ln(2001)}\times 100=\frac{5.96}{7.60}\times 100\approx \mathbf{78.4}$$
+$$\mathrm{logScore}(386,2000)=\frac{\ln(387)}{\ln(2001)}\times 100=\frac{5.96}{7.60}\times 100\approx \mathbf{78.4}$$
 
   이것이 `386 → 78.4` 단계입니다: 커밋 386개를 포화 2000으로 정규화하면 **100점 만점에 78.4점**입니다.
 
 **`linScore`** (이미 자연스러운 최댓값이 있는 값 — 예: 365일 중 활동일):
 
-$$\mathrm{linScore}(v,\,m) \;=\; \min\!\left(100,\; \frac{v}{m}\times 100\right)$$
+$$\mathrm{linScore}(v,m) = \min\left(100, \frac{v}{m}\times 100\right)$$
 
   예: 활동일 127일 / 최대 $m = 365$ → $\frac{127}{365}\times100 \approx 34.8$.
 
@@ -238,7 +238,7 @@ $$\mathrm{linScore}(v,\,m) \;=\; \min\!\left(100,\; \frac{v}{m}\times 100\right)
 
 각 축은 여러 정규화된 신호를 **가중치**로 평균합니다. 신호 $s_i$, 가중치 $w_i$일 때:
 
-$$\text{축} \;=\; \frac{\sum_i s_i \times w_i}{\sum_i w_i}$$
+$$\text{축} = \frac{\sum_i s_i \times w_i}{\sum_i w_i}$$
 
 > **표기:** `×`는 항상 **곱셈**을 뜻합니다. 아래 표에서 각 신호는 한 행이며,
 > **기여(contribution)** 열은 단순히 `점수 × 가중치`입니다. 축 점수는 기여들의 합입니다
@@ -296,7 +296,7 @@ $$\text{Consistency}=20.9+2.0=\mathbf{22.9}$$
 
 풀이 수는 **저지 전체를 먼저 합산**한 뒤 한 번만 정규화합니다. 그래서 저지를 추가해도 점수가 오르기만 하고 희석되지 않습니다:
 
-$$\text{ProblemSolving}=\mathrm{logScore}(\underbrace{229}_{\text{백준}}+\underbrace{2}_{\text{LeetCode}},\;2500)=\mathrm{logScore}(231,\,2500)\approx\mathbf{69.6}$$
+$$\text{ProblemSolving}=\mathrm{logScore}(\underbrace{229}_{\text{백준}}+\underbrace{2}_{\text{LeetCode}},2500)=\mathrm{logScore}(231,2500)\approx\mathbf{69.6}$$
 
 ### Depth (축 가중 0.20)
 
@@ -322,11 +322,11 @@ $$P_{\text{algo}}=20.0+11.6=\mathbf{31.6}$$
 
 $$P_{\text{project}}=29.8+4.7=\mathbf{34.5}$$
 
-**다양성 보너스** — 언어 개수 정규화: $\mathrm{logScore}(12,\,12)=100$.
+**다양성 보너스** — 언어 개수 정규화: $\mathrm{logScore}(12,12)=100$.
 
 두 기둥은 **max**로 결합되고(어느 한쪽만으로도 100 도달 가능), 다양성은 *남은 여유분*만(최대 +15%) 채웁니다. 그래서 약한 신호가 강한 신호를 끌어내리지 못합니다:
 
-$$\text{primary}=\max(P_{\text{algo}},\,P_{\text{project}})=\max(31.6,\,34.5)=34.5$$
+$$\text{primary}=\max(P_{\text{algo}},P_{\text{project}})=\max(31.6,34.5)=34.5$$
 
 $$\text{Depth}=\text{primary}+(100-\text{primary})\times 0.15\times\frac{\text{breadth}}{100}=34.5+(100-34.5)\times 0.15\times 1.0\approx\mathbf{44.3}$$
 
@@ -334,7 +334,7 @@ $$\text{Depth}=\text{primary}+(100-\text{primary})\times 0.15\times\frac{\text{b
 
 다섯 축을 가중치로 결합합니다:
 
-$$\text{overall}=0.30\,O+0.20\,P+0.20\,D+0.15\,C+0.15\,I$$
+$$\text{overall}=0.30O+0.20P+0.20D+0.15C+0.15I$$
 
 $$=0.30(61.8)+0.20(69.6)+0.20(44.3)+0.15(22.9)+0.15(55.3)=\mathbf{53.0}$$
 
@@ -344,19 +344,19 @@ Confidence는 "*신뢰할 만한 데이터가 실제로 얼마나 있나?*"를 �
 
 저지의 factor는 "무료(free)" 임계 10문제를 둡니다 — 처음 몇 문제는 0으로 쳐서, 빈 계정이 티어를 부풀리지 못하게 합니다:
 
-$$f_{\text{judge}}=\text{trust}\times\frac{\mathrm{logScore}\big(\max(0,\ \text{solved}-10),\ s\big)}{100}$$
+$$f_{\text{judge}}=\text{trust}\times\frac{\mathrm{logScore}\big(\max(0, \text{solved}-10), s\big)}{100}$$
 
 - GitHub factor — 최근 활동 *또는* 대표 소유 프로젝트 중 **강한 쪽** (bnbong은 최근 활동이 우세): $f_{\text{gh}} = 0.979$
-- solved.ac factor: trust $1.0$, $\mathrm{logScore}(229-10,\,2200)/100 \Rightarrow f_{\text{solvedac}} = 0.701$
-- LeetCode factor: 2문제뿐이라 $\max(0,\,2-10)=0$ → $f_{\text{leetcode}} = 0$
+- solved.ac factor: trust $1.0$, $\mathrm{logScore}(229-10,2200)/100 \Rightarrow f_{\text{solvedac}} = 0.701$
+- LeetCode factor: 2문제뿐이라 $\max(0,2-10)=0$ → $f_{\text{leetcode}} = 0$
 
-$$\text{confidence}=0.6\,f_{\text{gh}}+0.25\,f_{\text{solvedac}}+0.15\,f_{\text{leetcode}}=0.6(0.979)+0.25(0.701)+0=\mathbf{0.763}$$
+$$\text{confidence}=0.6f_{\text{gh}}+0.25f_{\text{solvedac}}+0.15f_{\text{leetcode}}=0.6(0.979)+0.25(0.701)+0=\mathbf{0.763}$$
 
 confidence **0.763**은 상한을 **Master**까지 엽니다.
 
 ### 최종 티어
 
-$$\text{tier}=\min(\underbrace{\text{Gold}}_{\text{점수 }53.0\,\in\,[45,58)},\ \underbrace{\text{Master}}_{\text{confidence 상한}})=\textbf{Gold}$$
+$$\text{tier}=\min(\underbrace{\text{Gold}}_{\text{점수 }53.0\in[45,58)}, \underbrace{\text{Master}}_{\text{confidence 상한}})=\textbf{Gold}$$
 
 overall 점수(53.0)가 Gold 구간에 들고, confidence 상한(Master)이 더 높아 티어를 끌어내리지 않습니다. **bnbong → Gold.**
 
