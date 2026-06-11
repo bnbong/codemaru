@@ -27,6 +27,12 @@ from codemaru.settings import get_settings
 # storage without bound (a plain SET would). Plenty precise for an adoption badge.
 _USERS_KEY = "codemaru:users:hll"
 
+# Legacy SET key from before the HLL switch. New writes only go to the HLL, but
+# the badge dual-reads this frozen SET so the historical count doesn't reset to 0
+# on deploy — as embeds re-fetch into the HLL it catches up and overtakes. Safe to
+# delete once the HLL count is comfortably above the SET's; the SET never grows.
+_LEGACY_USERS_KEY = "codemaru:users"
+
 # In-process dedupe: skip re-recording a handle already seen recently on this
 # warm instance. Caps redundant Redis commands from repeated or spoofed Camo
 # fetches (Upstash's free tier has a monthly command budget). Best-effort and
@@ -98,14 +104,24 @@ async def record_embed(handle: str) -> None:
         await _command(base, token, "PFADD", _USERS_KEY, handle)
 
 
+async def _count(base: str, token: str, *command: str) -> int:
+    """Run a counting command (PFCOUNT/SCARD), returning 0 on any failure."""
+    try:
+        return int(await _command(base, token, *command) or 0)
+    except Exception:  # noqa: BLE001 - tracking is best-effort, never fatal
+        return 0
+
+
 async def usage_count() -> int:
-    """Distinct embedded-user count (PFCOUNT). Returns 0 without KV or on failure."""
+    """Distinct embedded-user count. Returns 0 without KV.
+
+    Dual-reads the HLL (current) and the legacy SET (frozen, pre-migration) and
+    returns the larger, so the badge never regresses during/after the HLL switch.
+    """
     creds = _credentials()
     if creds is None:
         return 0
     base, token = creds
-    try:
-        result = await _command(base, token, "PFCOUNT", _USERS_KEY)
-        return int(result or 0)
-    except Exception:  # noqa: BLE001 - tracking is best-effort, never fatal
-        return 0
+    new = await _count(base, token, "PFCOUNT", _USERS_KEY)
+    legacy = await _count(base, token, "SCARD", _LEGACY_USERS_KEY)
+    return max(new, legacy)

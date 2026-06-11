@@ -48,7 +48,11 @@ def _client_with_secret(monkeypatch: pytest.MonkeyPatch, secret: str) -> TestCli
 def test_origin_guard_blocks_request_without_header(monkeypatch: pytest.MonkeyPatch):
     # No X-Origin-Auth -> a request that didn't pass through Cloudflare -> 403.
     client = _client_with_secret(monkeypatch, "s3cret")
-    assert client.get("/api/health").status_code == 403
+    res = client.get("/api/health")
+    assert res.status_code == 403
+    # SecurityHeaders is the outermost middleware, so even a guard rejection still
+    # carries nosniff — this locks in that ordering against future regressions.
+    assert res.headers["x-content-type-options"] == "nosniff"
 
 
 def test_origin_guard_allows_request_with_correct_header(monkeypatch: pytest.MonkeyPatch):

@@ -85,6 +85,7 @@ class _FakeClient:
 
     calls: list[tuple[str, list[str] | None]] = []
     result: Any = 7
+    result_by_cmd: dict[str, Any] | None = None
     status: int = 200
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -100,23 +101,34 @@ class _FakeClient:
         self, url: str, json: list[str] | None = None, headers: dict[str, str] | None = None
     ) -> _FakeResp:
         _FakeClient.calls.append((url, json))
-        return _FakeResp({"result": _FakeClient.result}, _FakeClient.status)
+        result = _FakeClient.result
+        if _FakeClient.result_by_cmd is not None and json:
+            result = _FakeClient.result_by_cmd.get(json[0], _FakeClient.result)
+        return _FakeResp({"result": result}, _FakeClient.status)
 
 
-def _use_fake(monkeypatch: pytest.MonkeyPatch, *, result: Any = 7, status: int = 200) -> None:
+def _use_fake(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    result: Any = 7,
+    result_by_cmd: dict[str, Any] | None = None,
+    status: int = 200,
+) -> None:
     monkeypatch.setattr(analytics, "_credentials", lambda: ("https://kv.example", "tok"))
     monkeypatch.setattr(analytics.httpx, "AsyncClient", _FakeClient)
     _FakeClient.calls = []
     _FakeClient.result = result
+    _FakeClient.result_by_cmd = result_by_cmd
     _FakeClient.status = status
 
 
-async def test_usage_count_reads_pfcount(monkeypatch: pytest.MonkeyPatch):
-    _use_fake(monkeypatch, result=7)
-    assert await usage_count() == 7
-    url, body = _FakeClient.calls[0]
-    assert url == "https://kv.example"  # command goes in the body, not the path
-    assert body == ["PFCOUNT", "codemaru:users:hll"]
+async def test_usage_count_dual_reads_hll_and_legacy_set(monkeypatch: pytest.MonkeyPatch):
+    # The badge dual-reads the HLL and the legacy SET and returns the larger, so
+    # it never regresses across the migration. Here the legacy SET is still ahead.
+    _use_fake(monkeypatch, result_by_cmd={"PFCOUNT": 7, "SCARD": 12})
+    assert await usage_count() == 12  # max(HLL 7, legacy SET 12)
+    bodies = [body for _url, body in _FakeClient.calls]
+    assert bodies == [["PFCOUNT", "codemaru:users:hll"], ["SCARD", "codemaru:users"]]
 
 
 async def test_record_embed_sends_lowercased_handle_in_body(monkeypatch: pytest.MonkeyPatch):
