@@ -16,10 +16,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           python-version: "3.12"
           enable-cache: true
@@ -27,6 +27,16 @@ jobs:
       - name: Install dependencies
         # --frozen fails the build if uv.lock is out of sync with pyproject.toml.
         run: uv sync --frozen --dev
+
+      - name: Verify requirements.txt matches uv.lock
+        # The Vercel build installs from requirements.txt; keep it pinned to the
+        # same versions as the lockfile so prod can't drift from what CI tested.
+        # Regenerate in place and fail if anything changed (git diff also avoids
+        # the `-o <name>` filename that uv records in the header comment).
+        run: |
+          uv export --frozen --no-dev --no-hashes --no-emit-project -o requirements.txt
+          git diff --exit-code -- requirements.txt \
+            || { echo "::error::requirements.txt is stale — regenerate: uv export --frozen --no-dev --no-hashes --no-emit-project -o requirements.txt"; exit 1; }
 
       - name: Lint (ruff)
         run: uv run ruff check .
@@ -42,7 +52,7 @@ jobs:
         run: uv run pytest -m "not integration" --cov=codemaru --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml

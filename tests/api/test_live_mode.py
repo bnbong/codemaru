@@ -134,3 +134,28 @@ def test_live_card_svg_renders(client: TestClient, live_mode: None, fake_adapter
     assert res.status_code == 200
     assert "x-codemaru-error" not in res.headers
     assert res.text.startswith("<svg")
+
+
+def test_live_camo_does_not_record_unknown_handle(
+    client: TestClient, live_mode: None, monkeypatch: pytest.MonkeyPatch
+):
+    # A spoofed `User-Agent: camo` for a non-existent handle (GitHub snapshot
+    # `unavailable`) must NOT be recorded — otherwise anyone could inflate the
+    # badge and grow the KV set without bound.
+    async def missing_github(login: str, **_: Any) -> GitHubSnapshot:
+        return _github(login, status=PlatformStatus.UNAVAILABLE)
+
+    recorded: list[str] = []
+
+    async def _spy(handle: str) -> None:
+        recorded.append(handle)
+
+    monkeypatch.setattr(service, "fetch_github", missing_github)
+    monkeypatch.setattr("codemaru.web.routes.record_embed", _spy)
+    res = client.get(
+        "/api/card.svg",
+        params={"github": "ghost-user-404"},
+        headers={"User-Agent": "github-camo/abc"},
+    )
+    assert res.status_code == 200  # still renders a (degraded) card
+    assert recorded == []  # but nothing counted

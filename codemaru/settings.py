@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     # delays card rendering; tune up if the KV region is far from the function.
     analytics_timeout_seconds: float = 0.8
 
+    # Shared secret to block requests that bypass the Cloudflare proxy by hitting
+    # the raw *.vercel.app origin directly (skipping WAF / rate limits). When set,
+    # a Cloudflare *request*-header Transform Rule must inject `X-Origin-Auth:
+    # <this>` on every request; the app then 403s any request lacking it. Set it
+    # ONLY in production (leave Preview/Dev blank so they stay reachable) and
+    # deploy the Cloudflare rule first, or all live traffic gets 403'd.
+    origin_shared_secret: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

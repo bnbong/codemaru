@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-06-11
+
+### Security
+
+- **Adoption tracking can no longer be spoofed or used to exhaust KV quota.**
+  Card embeds are now recorded only when the request is from Camo *and* the
+  GitHub snapshot is real (not `unavailable`), so a forged `User-Agent: camo`
+  against non-existent handles can't inflate the badge. The distinct-user store
+  moved from a Redis SET to a **HyperLogLog** (`PFADD`/`PFCOUNT`): a fixed ~12KB
+  ceiling regardless of cardinality, so a flood can't grow storage without bound.
+  (The badge count restarts from 0 on a new key — expected for a HLL switch.)
+- **Cloudflare-proxy bypass guard.** An optional `ORIGIN_SHARED_SECRET` makes the
+  app reject any request that lacks a matching `X-Origin-Auth` header (injected by
+  a Cloudflare request-header Transform Rule), so direct hits on the raw
+  `*.vercel.app` origin — which skip the WAF / rate limits — are blocked. Unlike a
+  Host-name check it can't be bypassed by spoofing Host. Disabled by default; set
+  only in production with the Cloudflare rule deployed first.
+- **Security response headers.** All responses send `X-Content-Type-Options:
+  nosniff`; the generator page adds a `Content-Security-Policy`, `X-Frame-Options:
+  DENY`, and `Referrer-Policy`; card SVGs send a locked-down `default-src 'none'`
+  CSP (defense-in-depth for direct opens).
+- **Supply chain hardening.** `requirements.txt` is now fully pinned from
+  `uv.lock` (no more `>=` ranges that let Vercel install untested versions), with
+  a CI check that fails if it drifts from the lockfile. All GitHub Actions are
+  pinned to commit SHAs, and Dependabot keeps both Actions and Python deps
+  updated.
+
 ## [1.1.0] - 2026-06-10
 
 ### Changed
@@ -133,6 +160,7 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
+[1.1.1]: https://github.com/bnbong/codemaru/compare/v1.1.1
 [1.1.0]: https://github.com/bnbong/codemaru/compare/v1.1.0
 [1.0.1]: https://github.com/bnbong/codemaru/compare/v1.0.1
 [1.0.0]: https://github.com/bnbong/codemaru/releases/tag/v1.0.0
