@@ -29,6 +29,12 @@ def _build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--leetcode", default=None, help="LeetCode handle")
     gen.add_argument("--theme", default="default", help="default | dark | transparent")
     gen.add_argument("--compact", action="store_true", help="compact layout (tier panel only)")
+    gen.add_argument(
+        "--animate",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="embed the entrance animation (default: on; --no-animate for a static card)",
+    )
     gen.add_argument("--out", required=True, help="output path for the generated SVG")
     return parser
 
@@ -51,6 +57,7 @@ async def _generate(args: argparse.Namespace) -> int:
             args.leetcode,
             args.theme,
             "true" if args.compact else "false",
+            "true" if args.animate else "false",
         )
     except QueryError as exc:
         print(f"error: {exc}", file=sys.stderr)

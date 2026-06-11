@@ -33,6 +33,21 @@ def test_generate_writes_svg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert "<svg" in out.read_text(encoding="utf-8")
 
 
+def test_generate_animation_default_and_opt_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    async def fake_get_summary(profile: ProfileInput) -> CodemaruSummary:
+        return _fake_summary(profile)
+
+    monkeypatch.setattr("codemaru.service.get_summary", fake_get_summary)
+
+    animated = tmp_path / "anim.svg"
+    assert cli.main(["generate", "--github", "octocat", "--out", str(animated)]) == 0
+    assert "<style>" in animated.read_text(encoding="utf-8")  # animation on by default
+
+    static = tmp_path / "static.svg"
+    assert cli.main(["generate", "--github", "octocat", "--no-animate", "--out", str(static)]) == 0
+    assert "<style>" not in static.read_text(encoding="utf-8")  # --no-animate is static
+
+
 def test_generate_rejects_invalid_username(tmp_path: Path):
     out = tmp_path / "codemaru.svg"
     rc = cli.main(["generate", "--github", "bad_name", "--out", str(out)])

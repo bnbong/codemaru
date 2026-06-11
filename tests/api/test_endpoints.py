@@ -106,6 +106,14 @@ def test_card_svg_compact(client: TestClient):
     assert 'viewBox="0 0 250 270"' in res.text
 
 
+def test_card_svg_animation_default_and_optout(client: TestClient):
+    animated = client.get("/api/card.svg", params={"github": "octocat"})
+    assert "<style>" in animated.text  # entrance animation on by default
+    static = client.get("/api/card.svg", params={"github": "octocat", "animate": "false"})
+    assert static.status_code == 200
+    assert "<style>" not in static.text  # opt-out ships a static card
+
+
 def test_card_svg_invalid_returns_error_card_with_200(client: TestClient):
     # 200 (not 4xx) so GitHub's Camo proxy shows the error card, not a broken image.
     res = client.get("/api/card.svg", params={"github": "foo_bar"})

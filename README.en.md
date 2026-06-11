@@ -2,7 +2,7 @@
   <img src=".github/codemaru_logo_text.png" alt="codemaru"/>
 </p>
 <p align="center">
-<em><b>Codemaru:</b> Render a developer's public activity and algorithm-training stats as an embeddable <b>summary card</b> for GitHub profile READMEs.</em>
+<em><b>Codemaru:</b> A tool that renders a developer's public activity and algorithm-training stats as an embeddable <b>summary card</b> for GitHub profile READMEs</em>
 </p>
 <p align="center">
 <img src="https://img.shields.io/badge/Python-3.12+-3776ab.svg?style=flat&logo=python&logoColor=white" alt="Python"/>
@@ -28,8 +28,8 @@ It reads **GitHub**, **BOJ / solved.ac**, and **LeetCode**, scores it across fiv
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/preview/card-dark.png">
-    <img width="560" alt="codemaru summary card" src=".github/preview/card-light.png">
+    <source media="(prefers-color-scheme: dark)" srcset=".github/preview/card-dark.gif">
+    <img width="560" alt="codemaru summary card (animated)" src=".github/preview/card-light.gif">
   </picture>
 </p>
 
@@ -138,6 +138,7 @@ Then embed the committed file anywhere in your README: `![codemaru](profile/code
 | `leetcode`     | `""`                   | LeetCode handle                              |
 | `theme`        | `default`              | `default` \| `dark` \| `transparent`         |
 | `compact`      | `false`                | compact (tier-panel-only) layout             |
+| `animate`      | `true`                 | embed the entrance animation (`false` for a static card) |
 | `out`          | `profile/codemaru.svg` | output path for the SVG                       |
 | `github-token` | `${{ github.token }}`  | auth token for reading data (**Optional**, the default workflow token is enough) |
 
