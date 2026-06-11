@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from fastapi.testclient import TestClient
 
 from codemaru.app import create_app
 from codemaru.settings import get_settings
+from codemaru.web.middleware import SecurityHeadersMiddleware
 
 
 def test_html_has_security_headers(client: TestClient):
@@ -63,3 +66,21 @@ def test_origin_guard_blocks_wrong_header(monkeypatch: pytest.MonkeyPatch):
 def test_origin_guard_disabled_when_no_secret(client: TestClient):
     # Default app (no ORIGIN_SHARED_SECRET): the check is off, all requests pass.
     assert client.get("/api/health").status_code == 200
+
+
+async def test_security_headers_passes_through_non_http_scope():
+    # Non-HTTP scopes (lifespan / websocket) must be forwarded untouched — the
+    # header logic only applies to http responses.
+    seen: dict[str, Any] = {}
+
+    async def downstream(scope: Any, receive: Any, send: Any) -> None:
+        seen["type"] = scope["type"]
+
+    async def _recv() -> dict[str, Any]:
+        return {"type": "lifespan.startup"}
+
+    async def _send(_message: dict[str, Any]) -> None:
+        return None
+
+    await SecurityHeadersMiddleware(downstream)({"type": "lifespan"}, _recv, _send)
+    assert seen["type"] == "lifespan"  # forwarded to the wrapped app

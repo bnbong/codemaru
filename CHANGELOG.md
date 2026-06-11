@@ -160,7 +160,7 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
-[Unreleased]: https://github.com/bnbong/codemaru/compare/v1.1.0...HEAD
+[1.1.1]: https://github.com/bnbong/codemaru/compare/v1.1.1
 [1.1.0]: https://github.com/bnbong/codemaru/compare/v1.1.0
 [1.0.1]: https://github.com/bnbong/codemaru/compare/v1.0.1
 [1.0.0]: https://github.com/bnbong/codemaru/releases/tag/v1.0.0
