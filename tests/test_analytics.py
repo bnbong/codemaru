@@ -111,12 +111,12 @@ def _use_fake(monkeypatch: pytest.MonkeyPatch, *, result: Any = 7, status: int =
     _FakeClient.status = status
 
 
-async def test_usage_count_reads_scard(monkeypatch: pytest.MonkeyPatch):
+async def test_usage_count_reads_pfcount(monkeypatch: pytest.MonkeyPatch):
     _use_fake(monkeypatch, result=7)
     assert await usage_count() == 7
     url, body = _FakeClient.calls[0]
     assert url == "https://kv.example"  # command goes in the body, not the path
-    assert body == ["SCARD", "codemaru:users"]
+    assert body == ["PFCOUNT", "codemaru:users:hll"]
 
 
 async def test_record_embed_sends_lowercased_handle_in_body(monkeypatch: pytest.MonkeyPatch):
@@ -124,7 +124,7 @@ async def test_record_embed_sends_lowercased_handle_in_body(monkeypatch: pytest.
     await record_embed("OctoCat")
     url, body = _FakeClient.calls[0]
     assert url == "https://kv.example"
-    assert body == ["SADD", "codemaru:users", "octocat"]  # body command, no URL encoding
+    assert body == ["PFADD", "codemaru:users:hll", "octocat"]  # HLL add, body command
 
 
 async def test_record_embed_dedupes_within_instance(monkeypatch: pytest.MonkeyPatch):
@@ -133,7 +133,10 @@ async def test_record_embed_dedupes_within_instance(monkeypatch: pytest.MonkeyPa
     await record_embed("octocat")  # same handle -> skipped
     await record_embed("torvalds")
     bodies = [body for _url, body in _FakeClient.calls]
-    assert bodies == [["SADD", "codemaru:users", "octocat"], ["SADD", "codemaru:users", "torvalds"]]
+    assert bodies == [
+        ["PFADD", "codemaru:users:hll", "octocat"],
+        ["PFADD", "codemaru:users:hll", "torvalds"],
+    ]
 
 
 async def test_record_embed_swallows_http_error(monkeypatch: pytest.MonkeyPatch):

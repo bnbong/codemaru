@@ -21,13 +21,16 @@ import httpx
 
 from codemaru.settings import get_settings
 
-# Single Redis SET of distinct embedded-card handles; SCARD is the badge number.
-_USERS_KEY = "codemaru:users"
+# A single Redis HyperLogLog of distinct embedded-card handles; PFCOUNT is the
+# badge number. HLL trades ~0.8% counting error for a fixed ~12KB ceiling per key
+# regardless of cardinality, so even a flood of distinct handles can't grow KV
+# storage without bound (a plain SET would). Plenty precise for an adoption badge.
+_USERS_KEY = "codemaru:users:hll"
 
 # In-process dedupe: skip re-recording a handle already seen recently on this
 # warm instance. Caps redundant Redis commands from repeated or spoofed Camo
 # fetches (Upstash's free tier has a monthly command budget). Best-effort and
-# bounded; correctness is unaffected since SADD is idempotent regardless.
+# bounded; correctness is unaffected since PFADD is idempotent regardless.
 _DEDUPE_TTL = 6 * 60 * 60  # seconds
 _DEDUPE_MAX = 4096
 _seen: dict[str, float] = {}
@@ -82,7 +85,7 @@ def _seen_recently(handle: str) -> bool:
 
 
 async def record_embed(handle: str) -> None:
-    """Add a handle to the distinct-users set (idempotent). No-op without KV."""
+    """Add a handle to the distinct-users HyperLogLog (idempotent). No-op without KV."""
     creds = _credentials()
     if creds is None:
         return
@@ -92,17 +95,17 @@ async def record_embed(handle: str) -> None:
     base, token = creds
     # Best-effort: a KV error/timeout must never break card rendering.
     with contextlib.suppress(Exception):
-        await _command(base, token, "SADD", _USERS_KEY, handle)
+        await _command(base, token, "PFADD", _USERS_KEY, handle)
 
 
 async def usage_count() -> int:
-    """Distinct embedded-user count (SCARD). Returns 0 without KV or on failure."""
+    """Distinct embedded-user count (PFCOUNT). Returns 0 without KV or on failure."""
     creds = _credentials()
     if creds is None:
         return 0
     base, token = creds
     try:
-        result = await _command(base, token, "SCARD", _USERS_KEY)
+        result = await _command(base, token, "PFCOUNT", _USERS_KEY)
         return int(result or 0)
     except Exception:  # noqa: BLE001 - tracking is best-effort, never fatal
         return 0

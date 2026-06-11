@@ -111,11 +111,19 @@ async def card_svg(
     # the URL directly) are served `no-store` so they can't populate the shared
     # CDN entry and shadow the Camo request that does the counting.
     if is_camo(request.headers.get("user-agent")):
+        # Only count handles backed by real GitHub data. A spoofed `User-Agent:
+        # camo` to a non-existent handle (live mode -> github snapshot
+        # `unavailable`) would otherwise let anyone inflate the badge and grow
+        # the KV set without bound. In fixture mode the snapshot is always usable.
+        gh = summary.snapshots.github
+        background = (
+            BackgroundTask(record_embed, profile.github) if gh is not None and gh.usable else None
+        )
         return Response(
             body,
             media_type=_SVG_MEDIA,
             headers=_cache_headers(body),
-            background=BackgroundTask(record_embed, profile.github),
+            background=background,
         )
     return Response(body, media_type=_SVG_MEDIA, headers={"Cache-Control": "no-store"})
 

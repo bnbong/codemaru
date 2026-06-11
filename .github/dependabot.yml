@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # Keep SHA-pinned workflow actions current — without this, pinning by commit
+  # would silently freeze actions at a version that never gets security fixes.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "[CI]"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Python deps: uv.lock is the source of truth (pyproject + lockfile). After a
+  # bump merges, regenerate requirements.txt — CI's sync check enforces it:
+  #   uv export --frozen --no-dev --no-hashes --no-emit-project -o requirements.txt
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "[DEPS]"
+    groups:
+      python:
+        patterns: ["*"]
