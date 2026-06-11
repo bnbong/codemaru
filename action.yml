@@ -25,6 +25,10 @@ inputs:
     description: "Use the compact (tier-panel-only) layout."
     required: false
     default: "false"
+  animate:
+    description: "Embed the one-shot entrance animation in the card (true/false)."
+    required: false
+    default: "true"
   out:
     description: "Output path for the generated SVG."
     required: false
@@ -62,10 +66,12 @@ runs:
         IN_LEETCODE: ${{ inputs.leetcode }}
         IN_THEME: ${{ inputs.theme }}
         IN_COMPACT: ${{ inputs.compact }}
+        IN_ANIMATE: ${{ inputs.animate }}
         IN_OUT: ${{ inputs.out }}
       run: |
         args=(--github "$IN_GITHUB" --theme "$IN_THEME" --out "$IN_OUT")
         [ -n "$IN_BOJ" ] && args+=(--boj "$IN_BOJ")
         [ -n "$IN_LEETCODE" ] && args+=(--leetcode "$IN_LEETCODE")
         [ "$IN_COMPACT" = "true" ] && args+=(--compact)
+        [ "$IN_ANIMATE" = "false" ] && args+=(--no-animate)
         codemaru generate "${args[@]}"

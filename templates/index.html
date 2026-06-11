@@ -73,7 +73,10 @@
         <div>
           <div class="preview-head">
             <h3>Preview</h3>
-            <button type="button" class="copy" id="refresh" title="Reload the preview — bypasses the browser/CDN cache">↻ Reload</button>
+            <div class="preview-actions">
+              <button type="button" class="copy ghost" id="replay" title="Replay the card's entrance animation">▶ Replay</button>
+              <button type="button" class="copy ghost" id="refresh" title="Reload the preview — bypasses the browser/CDN cache">↻ Reload</button>
+            </div>
           </div>
           <div class="preview">
             {% if preview_url %}
@@ -81,6 +84,9 @@
             {% else %}
             <span class="muted" id="preview-placeholder">Fix the highlighted field to preview</span>
             {% endif %}
+            <div class="spinner" id="preview-spinner" role="status" aria-live="polite" hidden>
+              <span class="visually-hidden">Loading preview…</span>
+            </div>
           </div>
 
           {% if snippets %}

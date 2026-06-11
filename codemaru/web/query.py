@@ -25,6 +25,7 @@ def parse_request(
     leetcode: str | None,
     theme: str | None,
     compact: str | None,
+    animate: str | None = None,
 ) -> tuple[ProfileInput, RenderOptions]:
     """Return (profile, options) or raise QueryError with a friendly message."""
     if not github or not github.strip():
@@ -41,14 +42,21 @@ def parse_request(
     except ValueError as exc:
         raise QueryError("theme: must be one of default, dark, transparent") from exc
 
-    compact_value = (compact or "").strip().lower()
-    if compact_value in _TRUTHY:
-        is_compact = True
-    elif compact_value in _FALSY:
-        is_compact = False
-    else:
-        raise QueryError("compact: must be true or false")
-    return profile, RenderOptions(theme=theme_enum, compact=is_compact)
+    is_compact = _parse_bool(compact, field="compact", default=False)
+    # Animation is on by default; an absent param keeps it on.
+    is_animate = _parse_bool(animate, field="animate", default=True)
+    return profile, RenderOptions(theme=theme_enum, compact=is_compact, animate=is_animate)
+
+
+def _parse_bool(value: str | None, *, field: str, default: bool) -> bool:
+    normalized = (value or "").strip().lower()
+    if value is None or normalized == "":
+        return default
+    if normalized in _TRUTHY:
+        return True
+    if normalized in _FALSY:
+        return False
+    raise QueryError(f"{field}: must be true or false")
 
 
 def _first_message(exc: ValidationError) -> str:

@@ -19,13 +19,17 @@
     compact: document.getElementById("compact"),
     previewImg: document.getElementById("preview-img"),
     preview: document.querySelector(".preview"),
+    spinner: document.getElementById("preview-spinner"),
     markdown: document.getElementById("snippet-markdown"),
     picture: document.getElementById("snippet-picture"),
     refresh: document.getElementById("refresh"),
+    replay: document.getElementById("replay"),
   };
 
   var actionAvailable = document.body.getAttribute("data-action-available") === "true";
   var refreshKey = 0;
+  var replaySeq = 0;
+  var spinnerTimer = null;
 
   function readState() {
     return {
@@ -76,6 +80,46 @@
     if (node) node.textContent = value;
   }
 
+  function showSpinner() {
+    if (els.spinner) els.spinner.hidden = false;
+    if (els.preview) els.preview.setAttribute("aria-busy", "true");
+  }
+
+  function hideSpinner() {
+    if (els.spinner) els.spinner.hidden = true;
+    if (els.preview) els.preview.removeAttribute("aria-busy");
+    if (spinnerTimer) {
+      clearTimeout(spinnerTimer);
+      spinnerTimer = null;
+    }
+  }
+
+  // Create the preview <img> the first time (replacing the placeholder) while
+  // keeping the spinner element in place.
+  function ensureImg() {
+    if (els.previewImg || !els.preview) return;
+    var placeholder = document.getElementById("preview-placeholder");
+    if (placeholder) placeholder.remove();
+    var img = document.createElement("img");
+    img.id = "preview-img";
+    img.alt = "codemaru card preview";
+    els.preview.insertBefore(img, els.spinner || null);
+    els.previewImg = img;
+  }
+
+  function setPreviewSrc(src) {
+    ensureImg();
+    if (!els.previewImg) return;
+    showSpinner();
+    els.previewImg.onload = hideSpinner;
+    els.previewImg.onerror = hideSpinner;
+    els.previewImg.src = src;
+    // Safety net: never leave the spinner up if the load event doesn't fire
+    // (e.g. an identical cached src or a stalled network).
+    if (spinnerTimer) clearTimeout(spinnerTimer);
+    spinnerTimer = setTimeout(hideSpinner, 6000);
+  }
+
   function render() {
     var s = readState();
     var err = validate(s);
@@ -87,19 +131,13 @@
 
     var query = buildQuery(s);
     var previewSrc = "/api/card.svg?" + query;
-    // Reload appends a unique value so the browser/CDN refetch the image; the
-    // server ignores it (its own summary cache still applies). Not added to the
-    // copied snippets.
+    // Reload appends a unique value so the browser/CDN refetch the image; Replay
+    // forces the <img> to reload so its entrance animation runs again. Both are
+    // server-ignored and kept out of the copied snippets.
     if (refreshKey > 0) previewSrc += "&refresh=" + refreshKey;
+    if (replaySeq > 0) previewSrc += "&_replay=" + replaySeq;
 
-    if (els.previewImg) {
-      els.previewImg.src = previewSrc;
-    } else if (els.preview) {
-      els.preview.innerHTML =
-        '<img id="preview-img" src="" alt="codemaru card preview" />';
-      els.previewImg = document.getElementById("preview-img");
-      els.previewImg.src = previewSrc;
-    }
+    setPreviewSrc(previewSrc);
 
     var origin = window.location.origin;
     var cardUrl = origin + "/api/card.svg?" + query;
@@ -130,6 +168,13 @@
   if (els.refresh) {
     els.refresh.addEventListener("click", function () {
       refreshKey = Date.now();
+      render();
+    });
+  }
+
+  if (els.replay) {
+    els.replay.addEventListener("click", function () {
+      replaySeq = Date.now();
       render();
     });
   }

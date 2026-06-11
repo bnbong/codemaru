@@ -2,7 +2,7 @@
   <img src=".github/codemaru_logo_text.png" alt="codemaru"/>
 </p>
 <p align="center">
-<em><b>Codemaru:</b> 개발자의 공개 활동과 알고리즘 학습 기록을 GitHub 프로필 README에 넣을 수 있는 <b>요약 카드</b>로 렌더링합니다.</em>
+<em><b>Codemaru:</b> 개발자의 공개 활동과 알고리즘 학습 기록을 GitHub 프로필 README에 넣을 수 있는 <b>요약 카드</b>로 렌더링하는 도구</em>
 </p>
 <p align="center">
 <img src="https://img.shields.io/badge/Python-3.12+-3776ab.svg?style=flat&logo=python&logoColor=white" alt="Python"/>
@@ -28,8 +28,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/preview/card-dark.png">
-    <img width="560" alt="codemaru summary card" src=".github/preview/card-light.png">
+    <source media="(prefers-color-scheme: dark)" srcset=".github/preview/card-dark.gif">
+    <img width="560" alt="codemaru summary card (animated)" src=".github/preview/card-light.gif">
   </picture>
 </p>
 
@@ -138,6 +138,7 @@ jobs:
 | `leetcode`     | `""`                   | LeetCode 핸들                                                 |
 | `theme`        | `default`              | `default` \| `dark` \| `transparent`                          |
 | `compact`      | `false`                | compact(티어 패널만) 레이아웃                                 |
+| `animate`      | `true`                 | 등장 애니메이션 포함 (`false`면 정적 카드)                    |
 | `out`          | `profile/codemaru.svg` | SVG 출력 경로                                                 |
 | `github-token` | `${{ github.token }}`  | 데이터 조회용 인증 토큰 (**Optional**, 직접 명시할 필요X)        |
 

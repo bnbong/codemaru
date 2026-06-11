@@ -95,9 +95,10 @@ async def card_svg(
     leetcode: str | None = None,
     theme: str | None = None,
     compact: str | None = None,
+    animate: str | None = None,
 ) -> Response:
     try:
-        profile, options = parse_request(github, boj, leetcode, theme, compact)
+        profile, options = parse_request(github, boj, leetcode, theme, compact, animate)
         summary = await get_summary(profile)
     except (QueryError, LiveDataUnavailableError) as exc:
         return _error_card(str(exc), theme)

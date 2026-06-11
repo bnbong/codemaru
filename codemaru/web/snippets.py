@@ -27,6 +27,9 @@ def build_card_query(profile: ProfileInput, options: RenderOptions) -> str:
         params.append(("theme", options.theme.value))
     if options.compact:
         params.append(("compact", "true"))
+    # Animation is the default, so only the opt-out needs to ride in the URL.
+    if not options.animate:
+        params.append(("animate", "false"))
     return urlencode(params)
 
 
@@ -50,6 +53,8 @@ def build_snippets(base_url: str, profile: ProfileInput, options: RenderOptions)
         with_lines.append(f"          theme: {options.theme.value}")
     if options.compact:
         with_lines.append("          compact: true")
+    if not options.animate:
+        with_lines.append("          animate: false")
     with_lines.append("          out: profile/codemaru.svg")
     with_block = "\n".join(with_lines)
 

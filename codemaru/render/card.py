@@ -338,6 +338,62 @@ def _footer(summary: CodemaruSummary, layout: _Layout, theme: Theme) -> str:
     )
 
 
+def _animation_css() -> str:
+    """A one-shot entrance animation for the tier emblem + nameplate, as a CSS
+    ``<style>`` block embedded in the SVG.
+
+    Declarative CSS animations run even when the SVG is referenced via ``<img>``
+    (e.g. a GitHub README), where scripts are disabled. Crucially, content
+    elements are never hidden by base styles — they only animate *from* a hidden
+    keyframe with ``animation-fill-mode: both`` — so any renderer that ignores the
+    ``<style>`` (or honours prefers-reduced-motion) still shows the complete card.
+
+    The sequence mirrors the design spec: hex stamps in → score → wing-rest rises
+    → wings swing in from each side → crown spikes rise left-to-right → apex gem
+    drops → nameplate wipes in.
+    """
+    # Crown spikes exist only for Gold+ (up to 7); stagger them left-to-right.
+    ray_delays = "".join(
+        f".cm-rays>*:nth-child({i}){{animation-delay:{0.98 + (i - 1) * 0.055:.2f}s}}"
+        for i in range(1, 8)
+    )
+    return (
+        "<style>"
+        "@keyframes cm-stamp{0%{opacity:0;transform:scale(1.5)}60%{opacity:1}"
+        "100%{opacity:1;transform:scale(1)}}"
+        "@keyframes cm-pop{0%{opacity:0;transform:translateY(4px)}"
+        "100%{opacity:1;transform:translateY(0)}}"
+        "@keyframes cm-rise{0%{opacity:0;transform:translateY(9px)}"
+        "100%{opacity:1;transform:translateY(0)}}"
+        "@keyframes cm-wing-l{0%{opacity:0;transform:rotate(-34deg)}"
+        "100%{opacity:1;transform:rotate(0)}}"
+        "@keyframes cm-wing-r{0%{opacity:0;transform:rotate(34deg)}"
+        "100%{opacity:1;transform:rotate(0)}}"
+        "@keyframes cm-ray{0%{opacity:0;transform:translateY(7px)}"
+        "100%{opacity:1;transform:translateY(0)}}"
+        "@keyframes cm-drop{0%{opacity:0;transform:translateY(-15px)}"
+        "100%{opacity:1;transform:translateY(0)}}"
+        "@keyframes cm-wipe{0%{clip-path:inset(0 100% 0 0)}100%{clip-path:inset(0 0 0 0)}}"
+        ".cm-hex{animation:cm-stamp .4s cubic-bezier(.2,.8,.2,1.25) both;"
+        "transform-box:fill-box;transform-origin:center}"
+        ".cm-score{animation:cm-pop .25s ease-out .34s both}"
+        ".cm-rest{animation:cm-rise .28s ease-out .54s both}"
+        ".cm-wing-l{animation:cm-wing-l .4s cubic-bezier(.2,.7,.3,1) .7s both;"
+        "transform-box:fill-box;transform-origin:bottom right}"
+        ".cm-wing-r{animation:cm-wing-r .4s cubic-bezier(.2,.7,.3,1) .7s both;"
+        "transform-box:fill-box;transform-origin:bottom left}"
+        ".cm-rays>*{animation:cm-ray .28s ease-out both}"
+        f"{ray_delays}"
+        ".cm-apex{animation:cm-drop .3s ease-out 1.45s both}"
+        ".cm-spark{animation:cm-pop .3s ease-out 1.55s both}"
+        ".cm-name{animation:cm-wipe .4s ease-out 1.68s both}"
+        "@media (prefers-reduced-motion:reduce){"
+        ".cm-hex,.cm-score,.cm-rest,.cm-wing-l,.cm-wing-r,.cm-rays>*,.cm-apex,.cm-spark,"
+        ".cm-name{animation:none}}"
+        "</style>"
+    )
+
+
 def render_card(summary: CodemaruSummary, options: RenderOptions | None = None) -> str:
     """Render a full card SVG for the summary."""
     opts = options or RenderOptions()
@@ -345,6 +401,7 @@ def render_card(summary: CodemaruSummary, options: RenderOptions | None = None) 
     theme = get_theme(opts.theme)
     token = id_token(f"{summary.input.github}:{summary.scores.tier.value}")
 
+    style = _animation_css() if opts.animate else ""
     with glyph_defs() as glyphs:
         parts = [
             gradient_defs(summary.scores.tier, token),
@@ -355,7 +412,7 @@ def render_card(summary: CodemaruSummary, options: RenderOptions | None = None) 
             # Compact shows only the tier panel — no footer.
             "" if opts.compact else _footer(summary, layout, theme),
         ]
-    return _svg_document(layout, summary, defs_markup(glyphs) + "".join(parts))
+    return _svg_document(layout, summary, defs_markup(glyphs) + style + "".join(parts))
 
 
 def render_error_card(message: str, options: RenderOptions | None = None) -> str:

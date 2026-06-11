@@ -18,6 +18,14 @@ def test_query_includes_non_default_options():
     assert "boj=baek" in qs
 
 
+def test_query_default_animate_is_omitted_optout_is_explicit():
+    # Animation is on by default, so a clean URL means it's on.
+    on = build_card_query(ProfileInput(github="octocat"), RenderOptions())
+    assert "animate" not in on
+    off = build_card_query(ProfileInput(github="octocat"), RenderOptions(animate=False))
+    assert "animate=false" in off
+
+
 def test_snippets_contain_card_url_and_markdown():
     snippets = build_snippets(
         "https://codemaru.dev", ProfileInput(github="octocat"), RenderOptions()
@@ -46,3 +54,11 @@ def test_action_snippet_omits_defaults():
     )
     assert "theme:" not in snippets["action"]
     assert "compact:" not in snippets["action"]
+    assert "animate:" not in snippets["action"]  # animation on by default
+
+
+def test_action_snippet_includes_animate_opt_out():
+    snippets = build_snippets(
+        "https://codemaru.dev", ProfileInput(github="octocat"), RenderOptions(animate=False)
+    )
+    assert "animate: false" in snippets["action"]

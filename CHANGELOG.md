@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-11
+
+### Added
+
+- **Animated tier emblem.** Cards now play a one-shot entrance animation: the
+  hex crest stamps in, then the score, the wing-rest and the wings swinging in
+  from each side, the crown spikes rising left-to-right, the apex gem dropping
+  in, and the nameplate wiping in. It's pure CSS `@keyframes`
+  embedded in the SVG, so it runs even when the card is an `<img>` in a README
+  (no scripts). Nothing is hidden by base styles, so any renderer that ignores
+  the stylesheet — or a viewer with `prefers-reduced-motion` — still gets the
+  full static card. Opt out with `?animate=false` (API), `--no-animate` (CLI), or
+  the Action's `animate: false` input.
+- **Generator preview: replay + loading spinner.** The preview now shows a
+  spinner while a card (re)loads, and a **Replay** button re-runs the entrance
+  animation without changing inputs.
+
 ## [1.1.1] - 2026-06-11
 
 ### Security
@@ -160,6 +177,7 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
+[1.2.0]: https://github.com/bnbong/codemaru/compare/v1.2.0
 [1.1.1]: https://github.com/bnbong/codemaru/compare/v1.1.1
 [1.1.0]: https://github.com/bnbong/codemaru/compare/v1.1.0
 [1.0.1]: https://github.com/bnbong/codemaru/compare/v1.0.1

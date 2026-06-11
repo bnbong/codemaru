@@ -1,4 +1,5 @@
 import re
+import xml.dom.minidom as minidom
 from datetime import UTC, datetime
 
 from codemaru.core.summary import build_summary
@@ -7,6 +8,7 @@ from codemaru.models.input import ProfileInput
 from codemaru.models.render import RenderOptions, ThemeName
 from codemaru.models.snapshot import SnapshotBundle
 from codemaru.render import render_card, render_error_card
+from codemaru.render.card import _animation_css
 from codemaru.render.xml import escape_xml, safe_text
 
 _TS = datetime(2026, 5, 31, tzinfo=UTC)
@@ -101,6 +103,46 @@ def test_footer_marks_stale_fallback():
     assert "stale data" not in render_card(fresh)
     stale = fresh.model_copy(update={"stale": True})
     assert "stale data" in render_card(stale)
+
+
+def test_card_animation_on_by_default():
+    svg = render_card(_summary())  # animate defaults to True
+    assert "<style>" in svg
+    assert "@keyframes cm-stamp" in svg
+    # The emblem sub-parts, split wings, and nameplate carry the hook classes.
+    for cls in ["cm-hex", "cm-score", "cm-wing-l", "cm-wing-r", "cm-rays", "cm-name"]:
+        assert f'class="{cls}"' in svg
+    # Accessibility: motion is disabled under prefers-reduced-motion.
+    assert "prefers-reduced-motion" in svg
+    # Still valid XML even with the embedded <style> and CSS child combinators.
+    minidom.parseString(svg)
+
+
+def test_card_animation_can_be_disabled():
+    svg = render_card(_summary(), RenderOptions(animate=False))
+    assert "<style>" not in svg
+    assert "@keyframes" not in svg
+    # The hook classes are harmless without the stylesheet, so the static card
+    # is unchanged structurally.
+    assert 'class="cm-hex"' in svg
+    minidom.parseString(svg)
+
+
+def test_animation_spikes_stagger_left_to_right():
+    css = _animation_css()
+    # Each crown spike gets a later delay than the previous (left-to-right rise).
+    d1 = float(re.search(r"nth-child\(1\)\{animation-delay:([\d.]+)s", css).group(1))
+    d7 = float(re.search(r"nth-child\(7\)\{animation-delay:([\d.]+)s", css).group(1))
+    assert d7 > d1
+
+
+def test_animation_wings_swing_in_from_opposite_sides():
+    css = _animation_css()
+    # Left and right wings rotate in from mirrored angles, pivoting at the bottom.
+    assert "@keyframes cm-wing-l" in css and "@keyframes cm-wing-r" in css
+    assert "rotate(-34deg)" in css and "rotate(34deg)" in css
+    assert "transform-origin:bottom right" in css
+    assert "transform-origin:bottom left" in css
 
 
 def test_error_card_is_valid_and_escaped():

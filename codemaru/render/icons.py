@@ -179,7 +179,9 @@ def _summit_rays(cx: float, cy: float, r: float, n: int, span_deg: float, fill_i
             f'<path d="M{fmt_num(bx + px)} {fmt_num(by + py)} L{fmt_num(tx)} {fmt_num(ty)} '
             f'L{fmt_num(bx - px)} {fmt_num(by - py)} Z" fill="url(#{fill_id})"/>'
         )
-    return "<g>" + "".join(rays) + "</g>"
+    # class="cm-rays" + each ray a direct child so the CSS can stagger them
+    # left-to-right via :nth-child (the loop already runs leftmost-first).
+    return '<g class="cm-rays">' + "".join(rays) + "</g>"
 
 
 def _gem_rhombus(cx: float, cy: float, s: float, hi: str, base: str, lo: str) -> str:
@@ -225,14 +227,19 @@ def _crest_ornament(cx: float, cy: float, r: float, tier: Tier, token: str) -> s
 
     rays = _summit_rays(cx, cy, r, int(cfg["ray"]), float(cfg["span"]), f"ray-{token}")
 
-    fronds = []
-    for mirror in (False, True):
-        fronds.append(
+    # Left/right fronds are separate groups so each can swing in from its own
+    # side, pivoting near the emblem's bottom (mirror=False is the left frond).
+    wings = []
+    for mirror, cls in ((False, "cm-wing-l"), (True, "cm-wing-r")):
+        wings.append(
+            f'<g class="{cls}">'
             f'<path d="{_frond_path(cx, cy, r, a0, a1, mirror)}" fill="url(#frond-{token})" '
             f'stroke="{hex_to_rgba(lo, 0.5)}" stroke-width="0.5" stroke-linejoin="round"/>'
             f'<path d="{_curl_path(cx, cy, r, a1, mirror)}" fill="none" '
             f'stroke="{hex_to_rgba(hi, 0.9)}" stroke-width="{fmt_num(r * 0.045)}" stroke-linecap="round"/>'
+            "</g>"
         )
+    fronds = "".join(wings)
 
     swash = ""
     sw = float(cfg["swash"])
@@ -255,21 +262,32 @@ def _crest_ornament(cx: float, cy: float, r: float, tier: Tier, token: str) -> s
             else ""
         )
         swash = (
+            '<g class="cm-rest">'
             f'<g fill="none" stroke="url(#frond-{token})" stroke-width="{fmt_num(r * 0.05)}" '
             f'stroke-linecap="round"><path d="{tail(False)}"/><path d="{tail(True)}"/></g>{gem}'
+            "</g>"
         )
 
     sparks = ""
     if int(cfg["spark"]) >= 2:
         lx, ly = _pt_at(cx, cy, r * 1.34, a1 - 8, False)
         rx, ry = _pt_at(cx, cy, r * 1.34, a1 - 8, True)
-        sparks = _sparkle(lx, ly, r * 0.15, hi) + _sparkle(rx, ry, r * 0.15, hi)
+        sparks = (
+            '<g class="cm-spark">'
+            + _sparkle(lx, ly, r * 0.15, hi)
+            + _sparkle(rx, ry, r * 0.15, hi)
+            + "</g>"
+        )
 
     apex = ""
     if cfg["apex"]:
-        apex = _gem_rhombus(cx, cy - r * 1.74, r * 0.135, hi, accent, hex_to_rgba(lo, 0.85))
+        apex = (
+            '<g class="cm-apex">'
+            + _gem_rhombus(cx, cy - r * 1.74, r * 0.135, hi, accent, hex_to_rgba(lo, 0.85))
+            + "</g>"
+        )
 
-    return f"<g>{defs}{rays}{''.join(fronds)}{swash}{sparks}{apex}</g>"
+    return f"<g>{defs}{rays}{fronds}{swash}{sparks}{apex}</g>"
 
 
 def gradient_defs(tier: Tier, token: str) -> str:
@@ -316,9 +334,9 @@ def tier_emblem(cx: float, cy: float, r: float, tier: Tier, overall: float, toke
             'stroke-linejoin="round"/>'
         )
 
-    return (
-        "<g>"
-        f"{_crest_ornament(cx, cy, r, tier, token)}"
+    # The faceted hexagon body (animated as one piece: the "stamp" entrance).
+    hex_body = (
+        '<g class="cm-hex">'
         f'<polygon points="{_pts(_hex_verts(cx, cy, r + 1.5))}" fill="none" '
         'stroke="rgba(0,0,0,0.25)" stroke-width="2" stroke-linejoin="round"/>'
         f'<polygon points="{_pts(outer)}" fill="url(#emblem-{token})" stroke="{accent}" '
@@ -330,6 +348,10 @@ def tier_emblem(cx: float, cy: float, r: float, tier: Tier, overall: float, toke
         f'stroke="{hex_to_rgba(accent, 0.55)}" stroke-width="1" stroke-linejoin="round"/>'
         f'<circle cx="{fmt_num(cx)}" cy="{fmt_num(apex_y + 0.5)}" r="{fmt_num(r * 0.085)}" '
         'fill="#fff" fill-opacity="0.9"/>'
+        "</g>"
+    )
+    score = (
+        '<g class="cm-score">'
         + text_path(
             str(round(overall)),
             family=MONO,
@@ -343,6 +365,7 @@ def tier_emblem(cx: float, cy: float, r: float, tier: Tier, overall: float, toke
         )
         + "</g>"
     )
+    return f"<g>{_crest_ornament(cx, cy, r, tier, token)}{hex_body}{score}</g>"
 
 
 # ---- strength competency glyphs ---------------------------------------------
@@ -459,6 +482,8 @@ def tier_nameplate(cx: float, yc: float, tier: Tier, box_w: float, box_h: float)
     x = cx - box_w / 2
     y = yc - box_h / 2
     return (
+        '<g class="cm-name">'
         f'<image href="{uri}" xlink:href="{uri}" x="{fmt_num(x)}" y="{fmt_num(y)}" '
         f'width="{fmt_num(box_w)}" height="{fmt_num(box_h)}" preserveAspectRatio="xMidYMid meet"/>'
+        "</g>"
     )
