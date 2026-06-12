@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-06-12
+
+### Changed
+
+- **Summary cache is shared across instances via Vercel KV (Upstash Redis).**
+  When `KV_REST_API_URL` / `KV_REST_API_TOKEN` are set, computed summaries and the
+  stale-fallback store live in Redis instead of per-instance memory, so a cold
+  serverless instance reuses a warm cache and skips the live fetch — cutting the
+  first-view "broken image until refresh" timeout. Best-effort: missing creds
+  (local / CI) or any KV error transparently falls back to the in-memory cache and
+  never affects rendering — and every KV write is mirrored locally, so a transient
+  KV read outage still serves a warm instance instead of rebuilding every request.
+  Reuses the same KV store as adoption tracking (disjoint
+  key namespaces). Cache keys are scoped by deploy env (`VERCEL_ENV`) and mode
+  (fixture/live) so a preview deploy or fixture data can't pollute production, and
+  a cached payload that fails to deserialize (e.g. written by a different deploy's
+  schema) is treated as a miss and rebuilt rather than surfacing a 500.
+- **Measured impact.** Local CPU work is not the bottleneck (`build_summary` is
+  about 0.05 ms, `render_card` about 0.77 ms, and cache JSON parse/store stays
+  below 0.02 ms); the expensive path is live platform fetches. In observed live
+  requests, GitHub-dominated fetches took roughly 2.0-5.5 s, while a warm shared
+  KV hit only needs a small JSON payload read plus parsing (typically tens of ms
+  or less in-region). This mainly helps cold/new serverless instances serving an
+  already-cached profile; CDN hits remain edge-fast, and a truly first-time cache
+  miss still has to perform the live fetch.
+
 ## [1.2.0] - 2026-06-11
 
 ### Added
@@ -177,6 +203,7 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
+[1.2.1]: https://github.com/bnbong/codemaru/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bnbong/codemaru/compare/v1.2.0
 [1.1.1]: https://github.com/bnbong/codemaru/compare/v1.1.1
 [1.1.0]: https://github.com/bnbong/codemaru/compare/v1.1.0

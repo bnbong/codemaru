@@ -36,13 +36,23 @@ class Settings(BaseSettings):
 
     redis_url: str | None = None
 
-    # Vercel KV (Upstash Redis) REST credentials for best-effort adoption
-    # tracking. Absent locally / in CI, so tracking degrades to a no-op.
+    # Vercel deployment environment (production / preview / development), injected
+    # automatically as VERCEL_ENV. Namespaces the shared cache so a preview deploy
+    # never reads or writes production cache entries. "local" when unset.
+    vercel_env: str = "local"
+
+    # Vercel KV (Upstash Redis) REST credentials. When set, they back BOTH the
+    # adoption-tracking counter AND the shared summary cache; absent locally / in
+    # CI, both degrade gracefully (no-op tracking, in-memory cache).
     kv_rest_api_url: str | None = None
     kv_rest_api_token: str | None = None
     # Timeout for the (best-effort) KV calls. Kept short so analytics never
     # delays card rendering; tune up if the KV region is far from the function.
     analytics_timeout_seconds: float = 0.8
+    # Timeout for shared-cache KV reads/writes on the card hot path. On a KV
+    # outage the call is abandoned after this and the service falls back to a
+    # rebuild, so it must stay small; raise only if the KV region is far away.
+    kv_timeout_seconds: float = 1.0
 
     # Shared secret to block requests that bypass the Cloudflare proxy by hitting
     # the raw *.vercel.app origin directly (skipping WAF / rate limits). When set,
