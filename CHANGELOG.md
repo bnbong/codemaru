@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first-view "broken image until refresh" timeout. Best-effort: missing creds
   (local / CI) or any KV error transparently falls back to the in-memory cache and
   never affects rendering — and every KV write is mirrored locally, so a transient
-  KV read outage still serves a warm instance instead of rebuilding every request.
+  KV read outage *or* a remote miss (e.g. a dropped write / eviction) still serves
+  a warm instance from the mirror instead of rebuilding every request.
   Reuses the same KV store as adoption tracking (disjoint
   key namespaces). Cache keys are scoped by deploy env (`VERCEL_ENV`) and mode
   (fixture/live) so a preview deploy or fixture data can't pollute production, and

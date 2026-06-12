@@ -64,7 +64,13 @@ async def _kv_get(memory: InMemoryCache, key: str) -> str | None:
         result = await kv.command(*creds, "GET", key)
     except Exception:  # noqa: BLE001 - KV down -> use whatever this instance cached
         return memory.get(key)
-    return result if result is None else str(result)
+    # A remote nil isn't authoritative here: an earlier SET may have failed (and
+    # been suppressed) or the entry was evicted while this instance still holds a
+    # valid mirror. Prefer the warm mirror so a write blip doesn't force a rebuild
+    # on every request; memory.get returns None too on a genuine miss.
+    if result is None:
+        return memory.get(key)
+    return str(result)
 
 
 async def _kv_set(memory: InMemoryCache, key: str, value: str, ttl_seconds: float) -> None:

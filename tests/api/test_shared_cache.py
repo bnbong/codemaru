@@ -101,6 +101,32 @@ async def test_kv_outage_uses_in_memory_mirror_not_rebuild(monkeypatch: pytest.M
     assert calls["n"] == 1  # second served from the in-memory mirror despite KV being down
 
 
+async def test_remote_miss_falls_back_to_in_memory_mirror(monkeypatch: pytest.MonkeyPatch):
+    # KV is up, but the remote entry isn't there (an earlier SET didn't persist or
+    # was evicted) while this instance still holds a valid mirror. A remote nil
+    # must NOT discard the mirror and force a rebuild on every request.
+    async def write_drop(_base: str, _token: str, *args: str) -> Any:
+        return None if args[0].upper() == "GET" else "OK"  # GET always nil, SET no-ops
+
+    monkeypatch.setattr("codemaru.kv.credentials", lambda: ("https://kv.example", "tok"))
+    monkeypatch.setattr("codemaru.kv.command", write_drop)
+
+    calls = {"n": 0}
+    real = demo.resolve_fixture_bundle
+
+    def counting(profile: ProfileInput):
+        calls["n"] += 1
+        return real(profile)
+
+    monkeypatch.setattr(service, "resolve_fixture_bundle", counting)
+    service.clear_cache()
+
+    profile = ProfileInput(github="octocat")
+    await service.get_summary(profile)
+    await service.get_summary(profile)
+    assert calls["n"] == 1  # second served from the mirror despite the remote nil
+
+
 async def test_corrupt_cache_entry_is_treated_as_miss(monkeypatch: pytest.MonkeyPatch):
     # A shared cache means a cached payload is now external input — an entry from
     # a different deploy's schema must NOT 500; it falls through to a rebuild
