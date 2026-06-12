@@ -21,6 +21,11 @@ def _isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("FIXTURE_MODE", "true")
     # Don't let a developer's local origin-guard secret 403 the whole test suite.
     monkeypatch.setenv("ORIGIN_SHARED_SECRET", "")
+    # Keep the cache in-memory in tests even if a local .env points at a real KV,
+    # so the suite never makes network calls (tests that exercise the KV path
+    # monkeypatch codemaru.kv directly instead).
+    monkeypatch.setenv("KV_REST_API_URL", "")
+    monkeypatch.setenv("KV_REST_API_TOKEN", "")
     get_settings.cache_clear()
     service.clear_cache()
     yield
