@@ -12,9 +12,10 @@ updates:
       actions:
         patterns: ["*"]
 
-  # Python deps: uv.lock is the source of truth (pyproject + lockfile). After a
-  # bump merges, regenerate requirements.txt — CI's sync check enforces it:
-  #   uv export --frozen --no-dev --no-hashes --no-emit-project -o requirements.txt
+  # Python deps: uv.lock is the source of truth (pyproject + lockfile). Dependabot
+  # doesn't regenerate the derived requirements.txt, so the PR's drift check is
+  # skipped for it; the sync-requirements workflow regenerates and commits
+  # requirements.txt on main once the bump merges. No manual step needed.
   - package-ecosystem: "uv"
     directory: "/"
     schedule:

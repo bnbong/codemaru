@@ -33,6 +33,11 @@ jobs:
         # same versions as the lockfile so prod can't drift from what CI tested.
         # Regenerate in place and fail if anything changed (git diff also avoids
         # the `-o <name>` filename that uv records in the header comment).
+        #
+        # Skipped for Dependabot: its bump PRs touch pyproject/uv.lock but not the
+        # derived requirements.txt, and its read-only token can't push a fix. The
+        # sync-requirements workflow regenerates it on main after the PR merges.
+        if: github.actor != 'dependabot[bot]'
         run: |
           uv export --frozen --no-dev --no-hashes --no-emit-project -o requirements.txt
           git diff --exit-code -- requirements.txt \

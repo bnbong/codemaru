@@ -1,0 +1,49 @@
+name: Sync requirements.txt
+
+# requirements.txt is a derived file (the Vercel build installs from it), but the
+# `uv` Dependabot ecosystem only updates pyproject.toml / uv.lock. After any such
+# change lands on main, regenerate requirements.txt from the lockfile and commit
+# it, so prod never drifts from what was resolved — no manual step, no PAT.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+
+permissions:
+  contents: write
+
+# Never run two syncs at once; let an in-flight one finish so its commit is seen.
+concurrency:
+  group: sync-requirements
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Regenerate requirements.txt from uv.lock
+        run: uv export --frozen --no-dev --no-hashes --no-emit-project -o requirements.txt
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- requirements.txt; then
+            echo "requirements.txt already in sync with uv.lock"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add requirements.txt
+          git commit -m "[CI] sync requirements.txt with uv.lock"
+          # A push made with GITHUB_TOKEN does not retrigger workflows, so this
+          # cannot loop. The commit only touches requirements.txt (not the trigger
+          # paths), so even path-filtered triggers would not re-fire.
+          git push
