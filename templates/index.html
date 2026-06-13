@@ -21,8 +21,18 @@
   <body data-action-available="{{ 'true' if action_available else 'false' }}">
     <main class="container">
       <header class="header">
-        <h1><img class="logo" src="/static/codemaru_logo.png" alt="" aria-hidden="true" /> codemaru</h1>
-        <p>Summarize your developer activity as an embeddable GitHub README card.</p>
+        <div class="header-text">
+          <h1><img class="logo" src="/static/codemaru_logo.png" alt="" aria-hidden="true" /> codemaru</h1>
+          <p>개발 활동을 GitHub profile README에 넣을 수 있는 요약 카드로 만들어 보세요.</p>
+        </div>
+        <nav class="header-links" aria-label="Project links">
+          <a href="https://github.com/bnbong/codemaru" target="_blank" rel="noopener noreferrer" title="GitHub repository" aria-label="GitHub repository">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          </a>
+          <a href="https://github.com/bnbong/codemaru/issues/new/choose" target="_blank" rel="noopener noreferrer" title="Report an issue" aria-label="Report an issue">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>
+          </a>
+        </nav>
       </header>
 
       <div class="layout">
@@ -103,6 +113,15 @@
             <div class="snippet-head"><h3>GitHub Action</h3><button type="button" class="copy" data-copy="action">Copy</button></div>
             <pre id="snippet-action">{{ snippets.action }}</pre>
           </div>
+          <p class="snippet-note">
+            GitHub Action을 사용할 경우, Action이 카드를 저장소에 커밋하므로 호스팅된
+            <code>/api/card.svg</code> URL이 아니라 커밋된 파일의 저장소 상대 경로(워크플로의
+            <code>out:</code>과 동일)로 임베드해야합니다:
+          </p>
+          <div class="snippet">
+            <div class="snippet-head"><h3>Embed (Action output)</h3><button type="button" class="copy" data-copy="action-embed">Copy</button></div>
+            <pre id="snippet-action-embed">![codemaru](profile/codemaru.svg)</pre>
+          </div>
           {% else %}
           <div class="snippet snippet-disabled">
             <div class="snippet-head"><h3>GitHub Action</h3><span class="badge">coming soon</span></div>
@@ -118,10 +137,8 @@
             {% elif mode == "unavailable" %}
             Live data is currently unavailable — the service is configured for live mode but no
             adapters are ready.
-            {% else %}
-            Live data is best-effort — a platform that's unavailable just degrades the card.
             {% endif %}
-            Scores summarize public activity, not an absolute skill rating.
+            점수는 공개 활동을 요약한 것이지 절대적인 실력 평가가 아닙니다. Maru를 향해 달리세요.
           </p>
         </div>
       </div>
