@@ -24,3 +24,4 @@ build/
 
 # Claude workspace
 .claude/
+_workspace/

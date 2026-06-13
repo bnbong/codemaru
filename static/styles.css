@@ -4,7 +4,7 @@
   --border: #30363d;
   --text: #e6edf3;
   --muted: #8b949e;
-  --accent: #58a6ff;
+  --accent: #f778ba;
   --radius: 10px;
   /* Coding-tool type pairing: Space Grotesk for UI, JetBrains Mono for code. */
   --font-sans: "Space Grotesk", "Segoe UI", Helvetica, Arial, sans-serif;
@@ -39,6 +39,13 @@ a {
   padding: 32px 20px 64px;
 }
 
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
 .header h1 {
   margin: 0 0 4px;
   font-size: 24px;
@@ -47,6 +54,34 @@ a {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.header-links {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.header-links a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.header-links a:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.header-links svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
 
 .header h1 .logo {
@@ -252,6 +287,21 @@ button.copy.ghost:hover {
 
 .snippet-disabled pre {
   opacity: 0.5;
+}
+
+.snippet-note {
+  margin: 16px 0 -2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.snippet-note code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
 }
 
 button.copy {
