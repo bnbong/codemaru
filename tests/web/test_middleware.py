@@ -20,8 +20,12 @@ def test_html_has_security_headers(client: TestClient):
     csp = res.headers["content-security-policy"]
     assert "default-src 'self'" in csp
     assert "frame-ancestors 'none'" in csp
+    # Parse into directives and assert the font-src value exactly. (Comparing the
+    # whole directive — not a `"<url>" in csp` substring check — also keeps CodeQL
+    # from flagging this as incomplete-URL-substring sanitization.)
+    directives = {part.split()[0]: part.strip() for part in csp.split(";") if part.strip()}
     # The only external origin the generator needs is Google Fonts.
-    assert "https://fonts.gstatic.com" in csp
+    assert directives["font-src"] == "font-src 'self' https://fonts.gstatic.com"
 
 
 def test_svg_has_locked_down_csp(client: TestClient):
