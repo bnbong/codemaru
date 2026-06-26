@@ -4,7 +4,7 @@ annotated-doc==0.0.4
     # via fastapi
 annotated-types==0.7.0
     # via pydantic
-anyio==4.14.0
+anyio==4.14.1
     # via
     #   httpx
     #   starlette
@@ -17,7 +17,7 @@ cffi==2.0.0
     # via curl-cffi
 curl-cffi==0.15.0
     # via codemaru
-fastapi==0.138.0
+fastapi==0.138.1
     # via codemaru
 fonttools==4.63.0
     # via codemaru
