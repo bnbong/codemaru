@@ -50,7 +50,7 @@ runs:
   using: "composite"
   steps:
     - name: Set up Python
-      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
         python-version: ${{ inputs.python-version }}
 
@@ -58,7 +58,7 @@ runs:
       # uv resolves and installs an order of magnitude faster than pip, and this
       # step runs on every card refresh in every consumer's repo. setup-python
       # above still provides the interpreter uv installs into (--system).
-      uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       with:
         # No cache: this runs inside the consumer's repo, and setup-uv's auto
         # cache would key off *their* workspace lockfiles (codemaru's own live
