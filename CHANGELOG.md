@@ -56,8 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deleted by accident. Dependabot's `uv` PRs bump `pyproject.toml` / `uv.lock`
   but can't regenerate the derived `requirements.txt`, so every one of them
   failed the drift check.
-- **CHANGELOG compare links** — the older ones pointed at a single ref instead of
-  a range, and `[unreleased]` had no target at all.
+- **GitHub GraphQL errors are no longer cached as "user not found".** An HTTP 200
+  with a top-level `errors` array (rate limiting, authorization failures) and no
+  `data.user` now gets the short negative TTL; only a `NOT_FOUND` error keeps the
+  long not-found TTL.
+- **JungOl: a missing or malformed solved history marks the snapshot `partial`**
+  instead of an `ok` snapshot with zero solves that could be cached for the full
+  TTL and overwrite the last-good copy.
 
 ### Changed
 
@@ -372,7 +377,7 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
-[unreleased]: https://github.com/bnbong/codemaru/compare/v1.2.1...HEAD
+[1.3.0]: https://github.com/bnbong/codemaru/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/bnbong/codemaru/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bnbong/codemaru/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/bnbong/codemaru/compare/v1.1.0...v1.1.1

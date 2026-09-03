@@ -221,6 +221,16 @@ def _ttl_for_github_note(note: str) -> int:
     return service._cache_ttl(summary, get_settings())
 
 
+def test_graphql_rate_limited_note_gets_the_short_negative_ttl():
+    # A GraphQL `errors` array (e.g. RATE_LIMITED) alongside a null user is
+    # noted `graphql error: RATE_LIMITED` by the adapter, distinct from a real
+    # missing user — it must keep the short retry-soon TTL, not the long one.
+    settings = get_settings()
+    assert (
+        _ttl_for_github_note("graphql error: RATE_LIMITED") == settings.negative_cache_ttl_seconds
+    )
+
+
 def test_only_a_real_missing_user_earns_the_long_not_found_ttl():
     # The adapter's classification is what selects the TTL, so the two must be
     # read together: an expired token (401), a rate limit (403) or a GitHub outage

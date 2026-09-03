@@ -238,20 +238,19 @@ def parse_account(
     """Build a JungOlSnapshot from a decoded ``/account/<id>/__data.json`` payload.
 
     A payload with no recognizable profile node is schema drift, so it maps to
-    ``unavailable``. A profile without its ``stat`` sibling is ``partial``: the
-    tier and rating survive, but the solved count comes from the history alone,
-    so its absence must not read as "solved nothing".
+    ``unavailable``. A profile without its ``stat`` sibling, or whose ``stat``
+    carries a missing/malformed ``solved`` field, is ``partial``: the tier and
+    rating survive, but the solved count comes from the history alone, so a
+    history that can't be read must not silently read as "solved nothing".
     """
     account, stat = _account_nodes(decoded)
     if account is None:
         return unavailable_snapshot(handle, "unexpected response", fetched_at)
 
     raw_handle = account.get("handle")
-    solved = stat.get("solved") if stat is not None else None
-    if not isinstance(solved, list):
-        solved = []
-
-    partial = stat is None
+    solved_raw = stat.get("solved") if stat is not None else None
+    partial = stat is None or not isinstance(solved_raw, list)
+    solved = solved_raw if isinstance(solved_raw, list) else []
     return JungOlSnapshot(
         status=PlatformStatus.PARTIAL if partial else PlatformStatus.OK,
         fetched_at=fetched_at,

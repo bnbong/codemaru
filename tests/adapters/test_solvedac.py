@@ -64,6 +64,19 @@ async def test_fetch_solvedac_stats_failure_is_partial(monkeypatch: pytest.Monke
     assert "distribution" in (snap.note or "")
 
 
+async def test_fetch_solvedac_unexpected_show_payload_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # A 200 that doesn't look like a profile (no "tier" key) is schema drift,
+    # not a real profile — must degrade rather than being parsed as-is.
+    routes = {SHOW_URL: FakeResponse(200, {"handle": "demo"})}
+    monkeypatch.setattr(solvedac, "AsyncSession", async_session_factory(routes))
+
+    snap = await fetch_solvedac("demo", fetched_at=_TS, timeout=5)
+    assert snap.status is PlatformStatus.UNAVAILABLE
+    assert snap.note == "unexpected response"
+
+
 async def test_fetch_solvedac_user_not_found_is_unavailable(monkeypatch: pytest.MonkeyPatch):
     routes = {SHOW_URL: FakeResponse(404, {"error": "not found"})}
     monkeypatch.setattr(solvedac, "AsyncSession", async_session_factory(routes))

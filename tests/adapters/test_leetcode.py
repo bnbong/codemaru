@@ -59,6 +59,13 @@ async def test_fetch_leetcode_user_not_found_is_unavailable():
     assert snap.status is PlatformStatus.UNAVAILABLE
 
 
+async def test_fetch_leetcode_http_error_is_unavailable():
+    client = FakeClient({GRAPHQL_URL: FakeResponse(500, {})})
+    snap = await fetch_leetcode("demo", fetched_at=_TS, client=cast(httpx.AsyncClient, client))
+    assert snap.status is PlatformStatus.UNAVAILABLE
+    assert snap.note == "http 500"
+
+
 async def test_fetch_leetcode_network_error_is_unavailable():
     client = FakeClient({GRAPHQL_URL: httpx.ConnectError("boom")})
     snap = await fetch_leetcode("demo", fetched_at=_TS, client=cast(httpx.AsyncClient, client))

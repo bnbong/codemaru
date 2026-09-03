@@ -211,6 +211,29 @@ def test_parse_account_clamps_and_defends_against_odd_field_types():
     snap = parse_account(decoded, "odd", _TS)
     assert (snap.account_id, snap.tier, snap.rating, snap.rank) == (0, 30, 0, 0)
     assert snap.solved_count == 0
+    # A `solved` field that isn't a list is malformed history, not "no solves":
+    # coercing it to [] while staying OK would cache a zero-solve snapshot for
+    # the full TTL and let it overwrite the last-good stale copy.
+    assert snap.status is PlatformStatus.PARTIAL
+    assert snap.note == "solved history unavailable"
+
+
+@pytest.mark.parametrize(
+    "solved_value",
+    [None, "absent", {"not": "a-list"}],
+    ids=["null", "missing", "dict"],
+)
+def test_parse_account_with_malformed_solved_history_is_partial(solved_value: object) -> None:
+    stat_data: dict[str, Any] = {} if solved_value == "absent" else {"solved": solved_value}
+    decoded = {
+        "$/account/1": {"data": {"handle": "odd", "id": 1, "tier": 7, "rv": 340, "rank": 100}},
+        "$/account/1/stat": {"data": stat_data},
+    }
+    snap = parse_account(decoded, "odd", _TS)
+    assert snap.status is PlatformStatus.PARTIAL
+    assert snap.note == "solved history unavailable"
+    assert snap.solved_count == 0
+    assert snap.tier == 7  # profile metrics still survive
 
 
 def test_parse_account_skips_malformed_solved_entries():
@@ -222,6 +245,7 @@ def test_parse_account_skips_malformed_solved_entries():
                     {"id": 1, "tier": {"tier": 12}},  # gold
                     {"id": 2, "tier": None},  # no tier -> unrated, ignored
                     {"id": 3},  # no tier key at all
+                    {"id": 4, "tier": {"tier": "not-a-number"}},  # unconvertible -> dropped
                     "not-a-dict",  # dropped entirely
                 ]
             }
@@ -229,7 +253,7 @@ def test_parse_account_skips_malformed_solved_entries():
     }
     snap = parse_account(decoded, "odd", _TS)
     # Every well-formed entry counts toward solved_count; only tiered ones band.
-    assert snap.solved_count == 4
+    assert snap.solved_count == 5
     assert snap.difficulty.gold == 1
 
 
@@ -400,6 +424,19 @@ async def test_fetch_jungol_oversized_body_is_rejected_before_parsing():
     assert snap.status is PlatformStatus.UNAVAILABLE
     assert snap.note == "response too large"
     assert len(seen) == 2
+
+
+async def test_fetch_jungol_oversized_lookup_body_is_rejected_before_parsing():
+    # The size guard applies to the handle-lookup response too, not just the
+    # account response.
+    huge = httpx.Response(200, content=b"x" * (4 * 1024 * 1024 + 1))
+    handler, seen = _routes(lookup=huge)
+    async with _client(handler) as client:
+        snap = await fetch_jungol("jungol", fetched_at=_TS, client=client)
+
+    assert snap.status is PlatformStatus.UNAVAILABLE
+    assert snap.note == "response too large"
+    assert len(seen) == 1  # no account request is attempted
 
 
 async def test_fetch_jungol_timeout_is_unavailable():

@@ -317,8 +317,15 @@ async def _fetch_github(
         *,
         query: str = _QUERY,
         timeout: httpx.Timeout | None = None,
-    ) -> dict[str, Any] | None:
-        """Fetch one page; ``timeout=None`` uses the client's own budget."""
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+        """Fetch one page; ``timeout=None`` uses the client's own budget.
+
+        Returns ``(user, errors)`` — ``errors`` is GraphQL's top-level
+        ``errors`` array, which can be non-empty even on an HTTP 200 (rate
+        limiting, resolver/authorization failures, a malformed query). The
+        caller needs both to tell a real missing user apart from a request that
+        merely came back with no ``data.user``.
+        """
         timeout_arg = timeout if timeout is not None else httpx.USE_CLIENT_DEFAULT
         resp = await client.post(
             GITHUB_GRAPHQL_URL,
@@ -328,11 +335,14 @@ async def _fetch_github(
         )
         if resp.status_code != 200:
             raise _PageStatusError(resp.status_code)
-        return (resp.json().get("data") or {}).get("user")
+        body = resp.json()
+        user = (body.get("data") or {}).get("user")
+        errors = body.get("errors")
+        return user, (errors if isinstance(errors, list) else [])
 
     try:
         try:
-            first = await _page(None)
+            first, first_errors = await _page(None)
         except _PageStatusError as exc:
             # An HTTP failure is about the *request*, not the handle: an expired
             # token (401), a rate limit (403) or a GitHub outage (5xx) says
@@ -341,9 +351,30 @@ async def _fetch_github(
             # the outage on every handle that asked during it.
             return unavailable_snapshot(login, f"http {exc.status_code}", fetched_at)
         if first is None:
-            # HTTP 200 with ``data.user: null`` — GraphQL's "Could not resolve to
-            # a User". This one really is a stable answer about the handle.
-            return unavailable_snapshot(login, NOT_FOUND_NOTE, fetched_at)
+            # HTTP 200 with ``data.user: null`` alone is ambiguous: GitHub uses
+            # the exact same shape for "Could not resolve to a User" (a stable
+            # answer about the handle) and for a request that failed for some
+            # other reason (rate limiting, an authorization failure, a malformed
+            # query) and simply has no data to return. The ``errors`` array is
+            # what tells them apart, so only a GraphQL ``NOT_FOUND`` error — or
+            # no error at all — earns the long not-found cache TTL; any other
+            # error type gets the short negative TTL instead, keyed off its type.
+            not_found = any(
+                isinstance(err, dict) and err.get("type") == "NOT_FOUND" for err in first_errors
+            )
+            if not first_errors or not_found:
+                return unavailable_snapshot(login, NOT_FOUND_NOTE, fetched_at)
+            error_type = next(
+                (
+                    err.get("type")
+                    for err in first_errors
+                    if isinstance(err, dict) and err.get("type")
+                ),
+                None,
+            )
+            return unavailable_snapshot(
+                login, f"graphql error: {error_type or 'unknown'}", fetched_at
+            )
 
         repos = first.get("repositories", {})
         first_nodes = repos.get("nodes", []) or []
@@ -364,7 +395,7 @@ async def _fetch_github(
                 budget_stopped = True
                 break
             try:
-                nxt = await _page(
+                nxt, _nxt_errors = await _page(
                     page_info.get("endCursor"),
                     query=_REPOS_QUERY,
                     timeout=page_timeout,
@@ -374,6 +405,10 @@ async def _fetch_github(
                 # (followers, contributions, top repos) instead of discarding the
                 # whole fetch.
                 nxt = None
+            # Follow-up pages keep today's behaviour: any problem — HTTP failure,
+            # no data.user, or a GraphQL error alongside a populated user (rare,
+            # but the aggregates from this page would be incomplete either way)
+            # — is treated as a failed page rather than being classified further.
             if nxt is None:  # a later page failed — keep what we have
                 page_failed = True
                 break

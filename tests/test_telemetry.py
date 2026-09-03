@@ -124,6 +124,15 @@ def test_formatter_wraps_unstructured_records_as_json():
     }
 
 
+def test_log_exception_is_a_noop_when_the_logger_is_disabled(caplog: pytest.LogCaptureFixture):
+    caplog.set_level(logging.CRITICAL, logger="codemaru")
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError:
+        telemetry.log_exception("card_error", handle="octocat")
+    assert [r for r in caplog.records if r.name == "codemaru"] == []
+
+
 def test_log_exception_splices_the_traceback_into_the_same_object(
     capture: pytest.LogCaptureFixture,
 ):

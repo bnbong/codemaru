@@ -416,6 +416,55 @@ async def test_fetch_github_first_page_http_error_is_not_user_not_found(status: 
     assert snap.note != NOT_FOUND_NOTE
 
 
+async def test_fetch_github_rate_limited_error_with_null_user_is_not_user_not_found():
+    # HTTP 200 with `data.user: null` AND a top-level `errors` array (GitHub's
+    # shape for rate limiting) is not a stable "no such user" answer — it must
+    # not earn the long not-found cache TTL, and must be retried quickly.
+    body = {
+        "data": {"user": None},
+        "errors": [{"type": "RATE_LIMITED", "message": "API rate limit exceeded"}],
+    }
+    client = FakeClient({GITHUB_GRAPHQL_URL: FakeResponse(200, body)})
+    snap = await fetch_github(
+        "octocat", token="t", fetched_at=_TS, client=cast(httpx.AsyncClient, client)
+    )
+    assert snap.status is PlatformStatus.UNAVAILABLE
+    assert snap.note == "graphql error: RATE_LIMITED"
+    assert snap.note != NOT_FOUND_NOTE
+
+
+async def test_fetch_github_graphql_not_found_error_is_user_not_found():
+    # GitHub's actual "no such user" shape carries a NOT_FOUND error alongside
+    # `data.user: null` — this really is the long-TTL case.
+    body = {
+        "data": {"user": None},
+        "errors": [
+            {"type": "NOT_FOUND", "message": "Could not resolve to a User with the login of 'x'."}
+        ],
+    }
+    client = FakeClient({GITHUB_GRAPHQL_URL: FakeResponse(200, body)})
+    snap = await fetch_github(
+        "x", token="t", fetched_at=_TS, client=cast(httpx.AsyncClient, client)
+    )
+    assert snap.status is PlatformStatus.UNAVAILABLE
+    assert snap.note == NOT_FOUND_NOTE
+
+
+async def test_fetch_github_errors_alongside_a_populated_user_are_parsed_as_ok():
+    # A GraphQL response can carry partial `errors` (e.g. for a field the token
+    # can't access) while still resolving `data.user` — that's a usable result.
+    body = {
+        "data": {"user": _user_payload()},
+        "errors": [{"type": "FORBIDDEN", "message": "some other field failed"}],
+    }
+    client = FakeClient({GITHUB_GRAPHQL_URL: FakeResponse(200, body)})
+    snap = await fetch_github(
+        "octocat", token="t", fetched_at=_TS, client=cast(httpx.AsyncClient, client)
+    )
+    assert snap.status is PlatformStatus.OK
+    assert snap.login == "octocat"
+
+
 async def test_fetch_github_network_error_is_unavailable():
     client = FakeClient({GITHUB_GRAPHQL_URL: httpx.ConnectError("boom")})
     snap = await fetch_github(
