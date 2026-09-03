@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
+from codemaru.adapters.registry import JUDGES
 from codemaru.models.input import ProfileInput
 from codemaru.models.render import RenderOptions, ThemeName
 
@@ -21,18 +22,26 @@ class QueryError(ValueError):
 
 def parse_request(
     github: str | None,
-    boj: str | None,
-    leetcode: str | None,
-    theme: str | None,
-    compact: str | None,
+    boj: str | None = None,
+    leetcode: str | None = None,
+    jungol: str | None = None,
+    theme: str | None = None,
+    compact: str | None = None,
     animate: str | None = None,
 ) -> tuple[ProfileInput, RenderOptions]:
     """Return (profile, options) or raise QueryError with a friendly message."""
     if not github or not github.strip():
         raise QueryError("github: a GitHub username is required")
 
+    # The judge params stay explicit in the signature (they mirror the public
+    # query contract, which FastAPI also declares by name), but the profile is
+    # assembled by walking the registry so a new judge flows through unchanged.
+    # A new judge is appended in registry order, which shifts the positions after
+    # it — so callers pass everything but ``github`` by keyword.
+    supplied = {"boj": boj, "leetcode": leetcode, "jungol": jungol}
+    handles = {p.param: supplied.get(p.param) for p in JUDGES}
     try:
-        profile = ProfileInput(github=github, boj=boj, leetcode=leetcode)
+        profile = ProfileInput(github=github, **handles)
     except ValidationError as exc:
         raise QueryError(_first_message(exc)) from exc
 

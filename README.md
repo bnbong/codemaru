@@ -24,7 +24,7 @@
 
 공개된 개발 활동을 README에 넣을 수 있는 SVG 카드로 만들어 주는 도구입니다.
 
-**GitHub**, **백준 / solved.ac**, **LeetCode** 데이터를 읽어 다섯 개 축으로 점수를 매기고, 8단계 티어로 분류, 카드로 렌더링해 README에 바로 붙일 수 있습니다.
+**GitHub**, **백준 / solved.ac**, **LeetCode**, **정올(JungOl)** 데이터를 읽어 다섯 개 축으로 점수를 매기고, 8단계 티어로 분류, 카드로 렌더링해 README에 바로 붙일 수 있습니다.
 
 <p align="center">
   <picture>
@@ -80,7 +80,7 @@ Seed → Bronze → Silver → Gold → Platinum → Diamond → Master → Maru
   <img src=".github/preview/generator.png" width="760" alt="codemaru 사이트 생성기"/>
 </p>
 
-1. **GitHub username**(필수)과 선택적으로 **BOJ / solved.ac**, **LeetCode** 핸들을 입력합니다.
+1. **GitHub username**(필수)과 선택적으로 **BOJ / solved.ac**, **LeetCode**, **JungOl** 핸들을 입력합니다.
 2. **Theme**(default / dark / transparent)과 **Layout**(default / compact)을 고릅니다.
 3. **Preview**에서 카드를 확인하고, **Markdown** 또는 **HTML `<picture>`** 스니펫의 **Copy**를 눌러 README에 붙여넣습니다.
 4. 데이터를 새로 불러오려면 **↻ Reload**를 누릅니다.
@@ -120,6 +120,7 @@ jobs:
           github: ${{ github.repository_owner }}   # 본인 GitHub 사용자명 (Action 실행 시 자동으로 치환)
           boj: your-solvedac-handle                # 선택
           leetcode: your-leetcode-handle           # 선택
+          jungol: your-jungol-handle               # 선택
           out: profile/codemaru.svg
       - run: |
           git config user.name "github-actions"
@@ -136,6 +137,7 @@ jobs:
 | `github`       | —  (필수)              | 요약할 **GitHub 사용자명**(예: `octocat`)                     |
 | `boj`          | `""`                   | solved.ac / 백준 핸들                                         |
 | `leetcode`     | `""`                   | LeetCode 핸들                                                 |
+| `jungol`       | `""`                   | 정올(JungOl) 핸들                                             |
 | `theme`        | `default`              | `default` \| `dark` \| `transparent`                          |
 | `compact`      | `false`                | compact(티어 패널만) 레이아웃                                 |
 | `animate`      | `true`                 | 등장 애니메이션 포함 (`false`면 정적 카드)                    |
@@ -159,8 +161,8 @@ jobs:
 | Open Source     | 커밋, PR, 리뷰, 기여한 repo, 이슈 (GitHub)                       |
 | Impact          | 스타, 포크, 팔로워, 공개 repo (GitHub)                          |
 | Consistency     | 활동한 날, 최장 연속 기록 (GitHub)                              |
-| Problem Solving | 푼 문제 수 (solved.ac + LeetCode)                               |
-| Depth           | 알고리즘 깊이(BOJ/LeetCode) **또는** 대표 프로젝트(소유 repo 최다 stars/forks), + 언어 다양성 |
+| Problem Solving | 푼 문제 수 (solved.ac + LeetCode + JungOl)                      |
+| Depth           | 알고리즘 깊이(BOJ/LeetCode/JungOl) **또는** 대표 프로젝트(소유 repo 최다 stars/forks), + 언어 다양성 |
 
 ```
 점수 계산(티어 가운데 표시된 숫자) = 0.30*openSource + 0.20*problemSolving + 0.20*depth + 0.15*consistency + 0.15*impact

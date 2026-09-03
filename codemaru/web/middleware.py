@@ -26,9 +26,38 @@ _HTML_CSP = (
     "form-action 'self'"
 )
 
-# Card SVGs reference no scripts or external resources (text is baked to vector
-# paths); the shields.io-style policy is pure defense-in-depth for direct opens.
-_SVG_CSP = "default-src 'none'; style-src 'unsafe-inline'"
+# Card SVGs load no scripts and no *remote* resources (text is baked to vector
+# paths), so everything stays denied except the two things the card itself uses:
+# `data:` images (the tier nameplate is an embedded base64 PNG — governed by
+# img-src, so omitting it renders the card without its nameplate when the URL is
+# opened directly in a tab) and inline styles (the entrance-animation
+# @keyframes). This mirrors GitHub Camo's own SVG policy.
+_SVG_CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'"
+
+# Swagger UI / ReDoc load their bundles from jsDelivr, so the generator page's
+# `script-src 'self'` would render /docs and /redoc blank. Widen the policy for
+# those three paths only (FastAPI serves the OAuth2 redirect helper too) and keep
+# framing denied. ReDoc additionally pulls Montserrat/Roboto from Google Fonts —
+# the same origins the generator page already allows — so without them its text
+# falls back to the browser default.
+#
+# `script-src` also needs 'unsafe-inline': FastAPI's get_swagger_ui_html boots
+# Swagger UI from an inline <script> and offers no nonce hook, so without it
+# /docs loads the bundle and then renders nothing. Scoped to these paths, the
+# widening covers only static, developer-facing pages that render no user input —
+# the generator page and the card endpoints keep the strict policy.
+_DOCS_PATHS = frozenset({"/docs", "/redoc", "/docs/oauth2-redirect"})
+_DOCS_CSP = (
+    "default-src 'self'; "
+    "img-src 'self' data: https://fastapi.tiangolo.com; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
+)
 
 
 class SecurityHeadersMiddleware:
@@ -42,13 +71,15 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
+        is_docs = scope.get("path", "") in _DOCS_PATHS
+
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(raw=message["headers"])
                 content_type = headers.get("content-type", "")
                 headers["X-Content-Type-Options"] = "nosniff"
                 if content_type.startswith("text/html"):
-                    headers["Content-Security-Policy"] = _HTML_CSP
+                    headers["Content-Security-Policy"] = _DOCS_CSP if is_docs else _HTML_CSP
                     headers["X-Frame-Options"] = "DENY"
                     headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
                 elif "image/svg+xml" in content_type:

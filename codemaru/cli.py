@@ -15,8 +15,19 @@ import os
 import sys
 from pathlib import Path
 
+from codemaru.adapters.registry import JUDGES
 from codemaru.render import render_card
+from codemaru.telemetry import configure_logging
 from codemaru.web.query import QueryError, parse_request
+
+# Per-flag help text, keyed by registry param. The registry's ``label`` is a UI
+# label ("BOJ / solved.ac"); the CLI keeps its own established wording, and a
+# judge without an entry here falls back to a label-derived one.
+_JUDGE_HELP = {
+    "boj": "solved.ac / BOJ handle",
+    "leetcode": "LeetCode handle",
+    "jungol": "JungOl / 정올 handle",
+}
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -25,8 +36,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     gen = sub.add_parser("generate", help="render a card SVG to a file")
     gen.add_argument("--github", required=True, help="GitHub username")
-    gen.add_argument("--boj", default=None, help="solved.ac / BOJ handle")
-    gen.add_argument("--leetcode", default=None, help="LeetCode handle")
+    for platform in JUDGES:
+        gen.add_argument(
+            f"--{platform.param}",
+            default=None,
+            help=_JUDGE_HELP.get(platform.param, f"{platform.label} handle"),
+        )
     gen.add_argument("--theme", default="default", help="default | dark | transparent")
     gen.add_argument("--compact", action="store_true", help="compact layout (tier panel only)")
     gen.add_argument(
@@ -48,16 +63,15 @@ async def _generate(args: argparse.Namespace) -> int:
 
     get_settings.cache_clear()
 
-    from codemaru.service import LiveDataUnavailableError, get_summary
+    from codemaru.service import get_summary
 
     try:
         profile, options = parse_request(
             args.github,
-            args.boj,
-            args.leetcode,
-            args.theme,
-            "true" if args.compact else "false",
-            "true" if args.animate else "false",
+            theme=args.theme,
+            compact="true" if args.compact else "false",
+            animate="true" if args.animate else "false",
+            **{p.param: getattr(args, p.param, None) for p in JUDGES},
         )
     except QueryError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -65,7 +79,10 @@ async def _generate(args: argparse.Namespace) -> int:
 
     try:
         summary = await get_summary(profile)
-    except LiveDataUnavailableError as exc:
+    except Exception as exc:  # noqa: BLE001 - a workflow wants an exit code, not a traceback
+        # Adapters map their own failures to `unavailable` snapshots, so reaching
+        # here means something genuinely unexpected broke. Exit 1 (runtime
+        # failure) to keep it distinct from exit 2 (bad arguments).
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
@@ -88,6 +105,9 @@ async def _generate(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Same structured stdout lines as the service, so an Action run is debuggable
+    # from its job log. No-ops when the host process already owns logging.
+    configure_logging()
     args = _build_parser().parse_args(argv)
     if args.command == "generate":
         return asyncio.run(_generate(args))

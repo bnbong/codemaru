@@ -101,6 +101,16 @@ a {
   align-items: start;
 }
 
+/* Grid items default to min-width: auto, which is their max-content size —
+   an intrinsically wide descendant (e.g. the 640px preview <img>) would
+   otherwise stretch the shared column track past the viewport on mobile,
+   where both panels collapse into one column. Letting items shrink below
+   their content size hands overflow handling back to the descendants that
+   already do it (img max-width: 100%, pre overflow-x: auto). */
+.layout > * {
+  min-width: 0;
+}
+
 @media (max-width: 760px) {
   .layout {
     grid-template-columns: 1fr;
@@ -144,10 +154,15 @@ a {
 .row {
   display: flex;
   gap: 12px;
+  /* Three controls don't fit side by side in the 320px panel, so let the row
+     wrap: the last one takes the next line and grows to the full width. */
+  flex-wrap: wrap;
 }
 
 .row > * {
-  flex: 1 1 0;
+  /* A real basis (not 0) keeps every control legible — a control that would be
+     squeezed below it wraps to the next line instead. */
+  flex: 1 1 110px;
   min-width: 0;
 }
 

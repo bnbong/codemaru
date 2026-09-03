@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from codemaru import __version__
 from codemaru.settings import get_settings
+from codemaru.telemetry import configure_logging
 from codemaru.web.middleware import OriginGuardMiddleware, SecurityHeadersMiddleware
 from codemaru.web.routes import router
 
@@ -16,6 +17,9 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 
 
 def create_app() -> FastAPI:
+    # Serverless logs are stdout, so structured lines have to be set up before
+    # the first request. No-ops when the host process already owns logging.
+    configure_logging()
     app = FastAPI(
         title="codemaru",
         description="Developer programming-activity summary cards for GitHub READMEs.",

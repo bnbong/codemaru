@@ -15,8 +15,10 @@
     github: document.getElementById("github"),
     boj: document.getElementById("boj"),
     leetcode: document.getElementById("leetcode"),
+    jungol: document.getElementById("jungol"),
     theme: document.getElementById("theme"),
     compact: document.getElementById("compact"),
+    animate: document.getElementById("animate"),
     previewImg: document.getElementById("preview-img"),
     preview: document.querySelector(".preview"),
     spinner: document.getElementById("preview-spinner"),
@@ -36,8 +38,10 @@
       github: els.github.value.trim(),
       boj: els.boj.value.trim(),
       leetcode: els.leetcode.value.trim(),
+      jungol: els.jungol.value.trim(),
       theme: els.theme.value,
       compact: els.compact.value === "true",
+      animate: els.animate.value !== "false",
     };
   }
 
@@ -47,17 +51,42 @@
       return "github: letters, numbers and single hyphens only";
     if (s.boj && !PLATFORM_RE.test(s.boj)) return "boj: invalid handle";
     if (s.leetcode && !PLATFORM_RE.test(s.leetcode)) return "leetcode: invalid handle";
+    if (s.jungol && !PLATFORM_RE.test(s.jungol)) return "jungol: invalid handle";
     return null;
   }
 
-  function buildQuery(s) {
+  // Mirrors build_card_query() in codemaru/web/snippets.py: defaults and empty
+  // handles are omitted so URLs stay clean. themeOverride builds the same query
+  // for a different theme (used by the <picture> dark <source>).
+  function buildQuery(s, themeOverride) {
+    var theme = themeOverride || s.theme;
     var p = new URLSearchParams();
     p.set("github", s.github);
     if (s.boj) p.set("boj", s.boj);
     if (s.leetcode) p.set("leetcode", s.leetcode);
-    if (s.theme !== "default") p.set("theme", s.theme);
+    if (s.jungol) p.set("jungol", s.jungol);
+    if (theme !== "default") p.set("theme", theme);
     if (s.compact) p.set("compact", "true");
+    if (!s.animate) p.set("animate", "false");
     return p.toString();
+  }
+
+  // Keep the address bar in sync with the form so a reload — or a shared link —
+  // reproduces exactly what's on screen. The cache-busting params stay out.
+  function syncUrl(query) {
+    if (!window.history || !window.history.replaceState) return;
+    var next = "/?" + query;
+    if (window.location.pathname + window.location.search === next) return;
+    window.history.replaceState(null, "", next);
+  }
+
+  // With animation off there is no entrance to replay, so the button falls back
+  // to a cache-busting reload — and says so.
+  function syncReplayTitle(animate) {
+    if (!els.replay) return;
+    els.replay.title = animate
+      ? "Replay the card's entrance animation"
+      : "Animation is off — reloads the preview";
   }
 
   function showError(message) {
@@ -122,6 +151,7 @@
 
   function render() {
     var s = readState();
+    syncReplayTitle(s.animate);
     var err = validate(s);
     if (err) {
       showError(err);
@@ -143,7 +173,23 @@
     var cardUrl = origin + "/api/card.svg?" + query;
     var alt = "codemaru card for " + s.github;
     setText(els.markdown, "[![" + alt + "](" + cardUrl + ")](https://github.com/" + s.github + ")");
-    setText(els.picture, '<picture>\n  <img alt="' + alt + '" src="' + cardUrl + '" />\n</picture>');
+
+    // Same rule as build_snippets(): a dark <source> paired with a light <img>
+    // fallback, so the embed follows the reader's GitHub theme. Every other
+    // param matches; picking "dark" makes the <img> fall back to "default",
+    // while "transparent" stays put (it suits either scheme).
+    var darkUrl = origin + "/api/card.svg?" + buildQuery(s, "dark");
+    var imgTheme = s.theme === "dark" ? "default" : s.theme;
+    var imgUrl = origin + "/api/card.svg?" + buildQuery(s, imgTheme);
+    setText(
+      els.picture,
+      "<picture>\n" +
+        '  <source media="(prefers-color-scheme: dark)" srcset="' + darkUrl + '" />\n' +
+        '  <img alt="' + alt + '" src="' + imgUrl + '" />\n' +
+        "</picture>"
+    );
+
+    syncUrl(query);
   }
 
   var timer = null;
@@ -152,10 +198,10 @@
     timer = setTimeout(render, 150);
   }
 
-  ["github", "boj", "leetcode"].forEach(function (id) {
+  ["github", "boj", "leetcode", "jungol"].forEach(function (id) {
     els[id].addEventListener("input", scheduleRender);
   });
-  ["theme", "compact"].forEach(function (id) {
+  ["theme", "compact", "animate"].forEach(function (id) {
     els[id].addEventListener("change", render);
   });
 
@@ -173,8 +219,13 @@
   }
 
   if (els.replay) {
+    syncReplayTitle(els.animate.value !== "false");
     els.replay.addEventListener("click", function () {
-      replaySeq = Date.now();
+      if (readState().animate) {
+        replaySeq = Date.now();
+      } else {
+        refreshKey = Date.now();
+      }
       render();
     });
   }

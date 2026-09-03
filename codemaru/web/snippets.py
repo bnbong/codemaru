@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
+from codemaru.adapters.registry import JUDGES
 from codemaru.models.input import ProfileInput
 from codemaru.models.render import RenderOptions, ThemeName
 
@@ -19,10 +20,10 @@ def build_card_query(profile: ProfileInput, options: RenderOptions) -> str:
     Default options and empty optional handles are omitted to keep URLs clean.
     """
     params: list[tuple[str, str]] = [("github", profile.github)]
-    if profile.boj:
-        params.append(("boj", profile.boj))
-    if profile.leetcode:
-        params.append(("leetcode", profile.leetcode))
+    for platform in JUDGES:
+        handle = profile.handle_for(platform.param)
+        if handle:
+            params.append((platform.param, handle))
     if options.theme is not ThemeName.DEFAULT:
         params.append(("theme", options.theme.value))
     if options.compact:
@@ -33,6 +34,14 @@ def build_card_query(profile: ProfileInput, options: RenderOptions) -> str:
     return urlencode(params)
 
 
+def _card_url(
+    base_url: str, profile: ProfileInput, options: RenderOptions, theme: ThemeName
+) -> str:
+    """Card URL for the same inputs with only the theme swapped."""
+    swapped = RenderOptions(theme=theme, compact=options.compact, animate=options.animate)
+    return f"{base_url}/api/card.svg?{build_card_query(profile, swapped)}"
+
+
 def build_snippets(base_url: str, profile: ProfileInput, options: RenderOptions) -> dict[str, str]:
     """Return cardUrl, markdown, picture, and action snippets for the given input."""
     query = build_card_query(profile, options)
@@ -40,15 +49,29 @@ def build_snippets(base_url: str, profile: ProfileInput, options: RenderOptions)
     alt = f"codemaru card for {profile.github}"
 
     markdown = f"[![{alt}]({card_url})](https://github.com/{profile.github})"
-    picture = f'<picture>\n  <img alt="{alt}" src="{card_url}" />\n</picture>'
+
+    # <picture> pairs a dark-scheme <source> with a light <img> fallback, so the
+    # embed follows the reader's GitHub theme. Every other param (compact,
+    # animate, handles) is identical between the two. When the user already picked
+    # `dark`, the <img> falls back to `default` so the pair really is light/dark;
+    # `transparent` is kept on the <img> because it suits either scheme.
+    dark_url = _card_url(base_url, profile, options, ThemeName.DARK)
+    img_theme = ThemeName.DEFAULT if options.theme is ThemeName.DARK else options.theme
+    img_url = _card_url(base_url, profile, options, img_theme)
+    picture = (
+        "<picture>\n"
+        f'  <source media="(prefers-color-scheme: dark)" srcset="{dark_url}" />\n'
+        f'  <img alt="{alt}" src="{img_url}" />\n'
+        "</picture>"
+    )
 
     # Mirror the same inputs as the preview so the static Action output matches
     # the dynamic card the user is looking at.
     with_lines = ["          github: ${{ github.repository_owner }}"]
-    if profile.boj:
-        with_lines.append(f"          boj: {profile.boj}")
-    if profile.leetcode:
-        with_lines.append(f"          leetcode: {profile.leetcode}")
+    for platform in JUDGES:
+        handle = profile.handle_for(platform.param)
+        if handle:
+            with_lines.append(f"          {platform.param}: {handle}")
     if options.theme is not ThemeName.DEFAULT:
         with_lines.append(f"          theme: {options.theme.value}")
     if options.compact:

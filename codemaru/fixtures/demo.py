@@ -12,6 +12,7 @@ from codemaru.models.input import ProfileInput
 from codemaru.models.snapshot import (
     DifficultyDistribution,
     GitHubSnapshot,
+    JungOlSnapshot,
     LeetCodeSnapshot,
     LeetCodeSolved,
     PlatformStatus,
@@ -71,15 +72,40 @@ def leetcode_fixture() -> LeetCodeSnapshot:
     )
 
 
+def jungol_fixture() -> JungOlSnapshot:
+    # Deliberately more modest than the solved.ac fixture: JungOl's problem pool
+    # is much smaller, so a strong JungOl account is a few hundred solves rather
+    # than a few thousand.
+    return JungOlSnapshot(
+        status=PlatformStatus.OK,
+        fetched_at=FIXED_TIMESTAMP,
+        handle="codemaru_demo",
+        account_id=100200,
+        tier=14,  # Gold II
+        rating=1500,
+        rank=300,
+        solved_count=420,
+        difficulty=DifficultyDistribution(
+            bronze=120, silver=140, gold=110, platinum=40, diamond=10
+        ),
+    )
+
+
 def full_bundle() -> SnapshotBundle:
     return SnapshotBundle(
         github=github_fixture(),
         solvedac=solvedac_fixture(),
         leetcode=leetcode_fixture(),
+        jungol=jungol_fixture(),
     )
 
 
-DEMO_INPUT = ProfileInput(github="codemaru-demo", boj="codemaru_demo", leetcode="codemaru_demo")
+DEMO_INPUT = ProfileInput(
+    github="codemaru-demo",
+    boj="codemaru_demo",
+    leetcode="codemaru_demo",
+    jungol="codemaru_demo",
+)
 
 
 def resolve_fixture_bundle(profile: ProfileInput) -> SnapshotBundle:
@@ -94,4 +120,6 @@ def resolve_fixture_bundle(profile: ProfileInput) -> SnapshotBundle:
         bundle.solvedac = solvedac_fixture().model_copy(update={"handle": profile.boj})
     if profile.leetcode:
         bundle.leetcode = leetcode_fixture().model_copy(update={"username": profile.leetcode})
+    if profile.jungol:
+        bundle.jungol = jungol_fixture().model_copy(update={"handle": profile.jungol})
     return bundle

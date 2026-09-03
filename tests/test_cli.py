@@ -53,3 +53,56 @@ def test_generate_rejects_invalid_username(tmp_path: Path):
     rc = cli.main(["generate", "--github", "bad_name", "--out", str(out)])
     assert rc == 2
     assert not out.exists()
+
+
+def test_generate_reports_a_runtime_failure_as_exit_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    # A workflow wants an exit code, not a traceback. 1 (runtime failure) stays
+    # distinct from 2 (bad arguments).
+    out = tmp_path / "codemaru.svg"
+
+    async def boom(profile: ProfileInput) -> CodemaruSummary:
+        raise RuntimeError("everything is on fire")
+
+    monkeypatch.setattr("codemaru.service.get_summary", boom)
+
+    rc = cli.main(["generate", "--github", "octocat", "--out", str(out)])
+
+    assert rc == 1
+    assert not out.exists()
+    assert "everything is on fire" in capsys.readouterr().err
+
+
+def test_generate_accepts_a_jungol_handle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # The flag is generated from the registry, so this also proves a new judge
+    # reaches the Action (which shells out to exactly this CLI).
+    seen: list[ProfileInput] = []
+
+    async def fake_get_summary(profile: ProfileInput) -> CodemaruSummary:
+        seen.append(profile)
+        return _fake_summary(profile)
+
+    monkeypatch.setattr("codemaru.service.get_summary", fake_get_summary)
+    out = tmp_path / "codemaru.svg"
+
+    rc = cli.main(["generate", "--github", "octocat", "--jungol", "jo", "--out", str(out)])
+
+    assert rc == 0
+    assert seen[0].jungol == "jo"
+    assert out.exists()
+
+
+def test_generate_rejects_an_invalid_jungol_handle(tmp_path: Path):
+    out = tmp_path / "codemaru.svg"
+    rc = cli.main(["generate", "--github", "octocat", "--jungol", "bad handle", "--out", str(out)])
+    assert rc == 2
+    assert not out.exists()
+
+
+def test_every_judge_has_a_cli_flag():
+    from codemaru.adapters.registry import JUDGES
+
+    help_text = cli._build_parser().parse_args(["generate", "--github", "x", "--out", "y"])
+    for platform in JUDGES:
+        assert hasattr(help_text, platform.param)

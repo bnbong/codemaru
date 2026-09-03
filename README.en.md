@@ -24,7 +24,7 @@
 
 A tool that turns your public developer activity into an embeddable SVG card.
 
-It reads **GitHub**, **BOJ / solved.ac**, and **LeetCode**, scores it across five axes, places you on an 8-rung tier ladder, and renders a self-contained card you can drop straight into a README.
+It reads **GitHub**, **BOJ / solved.ac**, **LeetCode**, and **JungOl**, scores it across five axes, places you on an 8-rung tier ladder, and renders a self-contained card you can drop straight into a README.
 
 <p align="center">
   <picture>
@@ -80,7 +80,7 @@ At **[codemaru.bnbong.com](https://codemaru.bnbong.com)**, enter your handles to
   <img src=".github/preview/generator.png" width="760" alt="codemaru hosted generator"/>
 </p>
 
-1. Enter your **GitHub username** (required) and, optionally, your **BOJ / solved.ac** and **LeetCode** handles.
+1. Enter your **GitHub username** (required) and, optionally, your **BOJ / solved.ac**, **LeetCode**, and **JungOl** handles.
 2. Pick a **Theme** (default / dark / transparent) and **Layout** (default / compact).
 3. Check the **Preview**, then hit **Copy** on the **Markdown** or **HTML `<picture>`** snippet and paste it into your README.
 4. Press **↻ Reload** to refetch the data.
@@ -120,6 +120,7 @@ jobs:
           github: ${{ github.repository_owner }}   # your GitHub username (auto-filled)
           boj: your-solvedac-handle                # optional
           leetcode: your-leetcode-handle           # optional
+          jungol: your-jungol-handle               # optional
           out: profile/codemaru.svg
       - run: |
           git config user.name "github-actions"
@@ -136,6 +137,7 @@ Then embed the committed file anywhere in your README: `![codemaru](profile/code
 | `github`       | —  (required)          | **GitHub username** to summarize (e.g. `octocat`) |
 | `boj`          | `""`                   | solved.ac / BOJ handle                       |
 | `leetcode`     | `""`                   | LeetCode handle                              |
+| `jungol`       | `""`                   | JungOl (정올) handle                          |
 | `theme`        | `default`              | `default` \| `dark` \| `transparent`         |
 | `compact`      | `false`                | compact (tier-panel-only) layout             |
 | `animate`      | `true`                 | embed the entrance animation (`false` for a static card) |
@@ -159,8 +161,8 @@ The Action wraps the `codemaru generate --github <user> --out <path>` CLI, so yo
 | Open Source     | commits, PRs, reviews, contributed repos, issues (GitHub)       |
 | Impact          | stars, forks, followers, public repos (GitHub)                  |
 | Consistency     | active days, longest streak (GitHub)                            |
-| Problem Solving | solved counts (solved.ac + LeetCode)                            |
-| Depth           | algorithmic depth (BOJ/LeetCode) **or** a standout owned project (top-repo stars/forks), + language breadth |
+| Problem Solving | solved counts (solved.ac + LeetCode + JungOl)                   |
+| Depth           | algorithmic depth (BOJ/LeetCode/JungOl) **or** a standout owned project (top-repo stars/forks), + language breadth |
 
 ```
 overall (the number in the tier medallion) = 0.30*openSource + 0.20*problemSolving + 0.20*depth + 0.15*consistency + 0.15*impact

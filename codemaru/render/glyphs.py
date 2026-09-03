@@ -7,8 +7,22 @@ Segoe UI/Consolas on Windows) — the card looks inconsistent and "cheap".
 
 Outlining the text to paths bakes the *designed* fonts (Space Grotesk,
 JetBrains Mono — both OFL, freely embeddable) into the SVG geometry, so the card
-renders identically on every OS and browser. Glyph outlines and per-weight font
-instances are cached; the variable fonts are instanced to the exact weight used.
+renders identically on every OS and browser.
+
+Fonts load in two tiers, because instancing a variable font is expensive
+(~200 ms per family/weight) and the card needs five of them:
+
+1. **Static instances (fast path).** Every (family, weight) the renderer
+   actually uses is listed in :data:`STATIC_INSTANCES` and pre-instanced at
+   development time into ``assets/fonts/<Family>-<weight>.ttf`` by
+   ``scripts/instance_fonts.py``. Opening one of those costs 2-4 ms. On a
+   serverless cold start that turns a ~1 s first render into a few ms.
+2. **On-the-fly instancing (fallback).** An unexpected weight — one nobody
+   pre-instanced — still works: the variable font is instanced at request time
+   exactly as before, just slowly. The variable TTFs stay shipped for this.
+
+Glyph outlines and loaded fonts are cached per process, so only the first
+render pays anything at all.
 """
 
 from __future__ import annotations
@@ -56,25 +70,79 @@ def defs_markup(registry: dict[str, str]) -> str:
 
 _FONT_DIR = Path(__file__).parent / "assets" / "fonts"
 
-# Logical family name -> variable font file.
+# Logical family name -> variable font file / static instance filename stem.
 SANS = "sans"
 MONO = "mono"
 _FILES = {SANS: "SpaceGrotesk.ttf", MONO: "JetBrainsMono.ttf"}
+_STEMS = {SANS: "SpaceGrotesk", MONO: "JetBrainsMono"}
+
+# Every (family, weight) the card renderer asks for — the set that must ship
+# pre-instanced. Keep in sync with card.py / icons.py; the render tests fail if
+# a renderer weight is missing a static file. Regenerate the files with
+# ``uv run python scripts/instance_fonts.py`` after editing this.
+STATIC_INSTANCES: tuple[tuple[str, int], ...] = (
+    (SANS, 400),  # error card body
+    (SANS, 500),  # card labels, wordmark, axis names
+    (SANS, 700),  # error card title
+    (MONO, 400),  # footer
+    (MONO, 500),  # handle, metric values
+    (MONO, 600),  # metric headline numbers
+    (MONO, 800),  # emblem score
+)
+
+# (upm, glyphset, cmap, space advance) — everything the outliner needs.
+_FontMetrics = tuple[int, Any, dict[int, str], float]
 
 
-@lru_cache(maxsize=16)
-def _instance(family: str, weight: int) -> tuple[int, Any, dict[int, str], float]:
-    """Instance a variable font to ``weight``; return (upm, glyphset, cmap, space)."""
-    font = TTFont(_FONT_DIR / _FILES[family])
+def static_path(family: str, weight: int) -> Path:
+    """Path of the pre-instanced static TTF for ``(family, weight)``."""
+    return _FONT_DIR / f"{_STEMS[family]}-{weight}.ttf"
+
+
+def variable_path(family: str) -> Path:
+    """Path of the shipped variable font for ``family``."""
+    return _FONT_DIR / _FILES[family]
+
+
+def _metrics(font: TTFont) -> _FontMetrics:
+    """Pull the outlining inputs out of an already-single-weight font."""
+    upm = int(font["head"].unitsPerEm)
+    glyphset = font.getGlyphSet()
+    cmap = font.getBestCmap()
+    space = glyphset[cmap[ord(" ")]].width if ord(" ") in cmap else upm * 0.5
+    return upm, glyphset, cmap, float(space)
+
+
+def _load_static(family: str, weight: int) -> _FontMetrics | None:
+    """Load the pre-instanced static TTF, or None if that weight isn't shipped."""
+    path = static_path(family, weight)
+    if not path.is_file():
+        return None
+    return _metrics(TTFont(path))
+
+
+def _load_instanced(family: str, weight: int) -> _FontMetrics:
+    """Instance the variable font at ``weight`` — the slow fallback path."""
+    font = TTFont(variable_path(family))
     # Clamp the requested weight to the font's axis range before instancing.
     axis = next(a for a in font["fvar"].axes if a.axisTag == "wght")
     w = max(axis.minValue, min(axis.maxValue, float(weight)))
+    # An out-of-range request may clamp onto a weight we already ship statically.
+    if w != float(weight):
+        static = _load_static(family, int(w))
+        if static is not None:
+            return static
     inst = instancer.instantiateVariableFont(font, {"wght": w}, inplace=False)
-    upm = int(inst["head"].unitsPerEm)
-    glyphset = inst.getGlyphSet()
-    cmap = inst.getBestCmap()
-    space = glyphset[cmap[ord(" ")]].width if ord(" ") in cmap else upm * 0.5
-    return upm, glyphset, cmap, float(space)
+    return _metrics(inst)
+
+
+@lru_cache(maxsize=16)
+def _instance(family: str, weight: int) -> _FontMetrics:
+    """Resolve ``(family, weight)`` to (upm, glyphset, cmap, space)."""
+    static = _load_static(family, weight)
+    if static is not None:
+        return static
+    return _load_instanced(family, weight)
 
 
 @lru_cache(maxsize=8192)

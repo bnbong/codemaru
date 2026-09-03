@@ -22,6 +22,9 @@ class RecordedCall:
     params: dict[str, Any] | None = None
     json: Any | None = None
     headers: dict[str, str] | None = None
+    # Whatever was passed as ``timeout=`` (an httpx.Timeout, or httpx's
+    # USE_CLIENT_DEFAULT sentinel when the caller wants the client's own budget).
+    timeout: Any | None = None
 
 
 # A route value is either a single response/exception (returned on every call to
@@ -56,8 +59,9 @@ class FakeClient:
         url: str,
         json: Any | None = None,
         headers: dict[str, str] | None = None,
+        timeout: Any | None = None,
     ) -> FakeResponse:
-        return self._resolve(RecordedCall("POST", url, json=json, headers=headers))
+        return self._resolve(RecordedCall("POST", url, json=json, headers=headers, timeout=timeout))
 
 
 def async_session_factory(

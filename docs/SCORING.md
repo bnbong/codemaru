@@ -4,7 +4,7 @@
 
 This is a from-scratch walkthrough of the scoring pipeline, using a real profile (`bnbong`) as the example. 
 
-Numbers are a point-in-time snapshot (`scoreVersion` 0.3.0) and change with live data.
+Numbers are a point-in-time snapshot (`scoreVersion` 0.4.0) and change with live data.
 
 > Scores summarize **public activity**, not an absolute skill rating.
 
@@ -62,7 +62,7 @@ The five axes and their weights in the final blend:
 | Axis | Signals (source) | Weight in overall |
 | --- | --- | --- |
 | Open Source | commits, contributed repos, PRs, reviews, issues — past year (GitHub) | 0.30 |
-| Problem Solving | total problems solved, summed across judges (solved.ac + LeetCode) | 0.20 |
+| Problem Solving | total problems solved, summed across judges (solved.ac + LeetCode + JungOl) | 0.20 |
 | Depth | algorithmic depth (judges) **or** a standout owned project, + language breadth | 0.20 |
 | Consistency | active days, longest streak (GitHub) | 0.15 |
 | Impact | stars, forks, followers, public repos (GitHub) | 0.15 |
@@ -162,8 +162,13 @@ $$f_{\text{judge}}=\text{trust}\times\frac{\mathrm{logScore}\big(\max(0, \text{s
 - GitHub factor — the **stronger of** recent activity *or* a standout owned project (for bnbong, recent activity dominates): $f_{\text{gh}} = 0.979$
 - solved.ac factor: trust $1.0$, $\mathrm{logScore}(229-10,2200)/100 \Rightarrow f_{\text{solvedac}} = 0.701$
 - LeetCode factor: only 2 solves, and $\max(0,2-10)=0$, so $f_{\text{leetcode}} = 0$
+- JungOl factor: no handle supplied, so the term is simply absent
 
-$$\text{confidence}=0.6f_{\text{gh}}+0.25f_{\text{solvedac}}+0.15f_{\text{leetcode}}=0.6(0.979)+0.25(0.701)+0=\mathbf{0.763}$$
+$$\text{confidence}=0.6f_{\text{gh}}+0.25f_{\text{solvedac}}+0.15f_{\text{leetcode}}+0.10f_{\text{jungol}}=0.6(0.979)+0.25(0.701)+0+0=\mathbf{0.763}$$
+
+Judge weights are **added**, never renormalized: a judge that ships later cannot
+lower an existing confidence, and the existing clamp to $[0,1]$ absorbs the fact
+that the weights now sum past 1.
 
 A confidence of **0.763** opens the cap up to **Master**.
 
@@ -180,6 +185,42 @@ The overall score (53.0) lands in the Gold band, and the confidence cap (Master)
 - A strong **single-source** profile (e.g. GitHub-only) can reach up to **Master**.
 - The top tier **Maru** is reserved for an all-round, multi-platform *pentagon*: deep across both open-source and algorithm activity.
 
+## Where each judge fits
+
+All judges feed the same two axes, and always **additively**:
+
+| Judge | Problem Solving | Depth | trust | saturation | confidence weight |
+| --- | --- | --- | --- | --- | --- |
+| solved.ac / BOJ | solved count | tier (`linScore`, $m=30$) + hard volume | 1.00 | 2200 | 0.25 |
+| LeetCode | solved count | contest rating above 1200 + hard solves | 0.75 | 1400 | 0.15 |
+| JungOl | solved count | tier × **0.80** + hard volume | 0.60 | 900 | 0.10 |
+
+JungOl uses the same 0–30 tier scale as solved.ac (its own site states that tiers
+are computed from a solved.ac AC rating), so the difficulty bands and tier names
+carry over unchanged. Its problem pool is far smaller than BOJ's, though, so the
+same tier is weaker evidence — hence the **0.80** scale on its rating signal.
+
+Because Depth takes the *maximum* rating evidence across judges and *sums* hard
+volume, that scale-down can only ever be conservative: linking JungOl never
+lowers a card. The same holds for Problem Solving (a sum) and for confidence
+(an added term). Trust is 0.60 because the data comes from the `__data.json`
+payload JungOl's own pages already serve — public, but a framework internal
+rather than a documented API.
+
+## Unsupported platforms
+
+**Programmers** and **CodeTree** are not collected, and that is a deliberate
+decision rather than a to-do. Neither exposes a public profile or API that works
+without logging in: Programmers removed its public profile pages entirely and its
+`robots.txt` disallows them, CodeTree's `robots.txt` disallows everything and its
+API requires a JWT, and SWEA redirects every stats page to a login. Programmers'
+terms of service also prohibit crawling and scraping.
+
+The workaround the community uses — putting your account ID and password into a
+repository secret — is not something codemaru will ask for or support. **codemaru
+never handles platform credentials, cookies, or sessions**; it reads only what is
+public.
+
 ## Caveats
 
 - A transient fetch failure on one platform degrades that platform to `unavailable` (e.g. solved.ac temporarily blocked), which lowers the affected axes for that request. In production a last-successful **stale fallback** serves the previous good result so the tier doesn't flicker.
@@ -193,7 +234,7 @@ The overall score (53.0) lands in the Gold band, and the confidence cap (Master)
 
 실제 프로필(`bnbong`)을 예시로 점수 산정 파이프라인을 처음부터 따라갑니다. 
 
-수치는 특정 시점 스냅샷(`scoreVersion` 0.3.0)이며 실시간 데이터에 따라 바뀝니다.
+수치는 특정 시점 스냅샷(`scoreVersion` 0.4.0)이며 실시간 데이터에 따라 바뀝니다.
 
 > 점수는 **공개 활동**을 요약한 것이지 절대적인 실력 평가가 아닙니다.
 
@@ -249,7 +290,7 @@ $$\text{축} = \frac{\sum_i s_i \times w_i}{\sum_i w_i}$$
 | 축 | 신호 (출처) | overall 가중 |
 | --- | --- | --- |
 | Open Source | 커밋, 기여 repo, PR, 리뷰, 이슈 — 최근 1년 (GitHub) | 0.30 |
-| Problem Solving | 저지 전체를 합산한 총 푼 문제 수 (solved.ac + LeetCode) | 0.20 |
+| Problem Solving | 저지 전체를 합산한 총 푼 문제 수 (solved.ac + LeetCode + JungOl) | 0.20 |
 | Depth | 알고리즘 깊이(저지) **또는** 대표 소유 프로젝트, + 언어 다양성 | 0.20 |
 | Consistency | 활동한 날, 최장 연속 기록 (GitHub) | 0.15 |
 | Impact | stars, forks, followers, 공개 repo (GitHub) | 0.15 |
@@ -349,8 +390,13 @@ $$f_{\text{judge}}=\text{trust}\times\frac{\mathrm{logScore}\big(\max(0, \text{s
 - GitHub factor — 최근 활동 *또는* 대표 소유 프로젝트 중 **강한 쪽** (bnbong은 최근 활동이 우세): $f_{\text{gh}} = 0.979$
 - solved.ac factor: trust $1.0$, $\mathrm{logScore}(229-10,2200)/100 \Rightarrow f_{\text{solvedac}} = 0.701$
 - LeetCode factor: 2문제뿐이라 $\max(0,2-10)=0$ → $f_{\text{leetcode}} = 0$
+- JungOl factor: 핸들을 넣지 않았으므로 항 자체가 없습니다
 
-$$\text{confidence}=0.6f_{\text{gh}}+0.25f_{\text{solvedac}}+0.15f_{\text{leetcode}}=0.6(0.979)+0.25(0.701)+0=\mathbf{0.763}$$
+$$\text{confidence}=0.6f_{\text{gh}}+0.25f_{\text{solvedac}}+0.15f_{\text{leetcode}}+0.10f_{\text{jungol}}=0.6(0.979)+0.25(0.701)+0+0=\mathbf{0.763}$$
+
+저지 가중치는 나눠 갖지 않고 **더합니다**. 나중에 저지가 추가돼도 기존 사용자의
+confidence가 내려가지 않으며, 가중치 합이 1을 넘는 부분은 기존 $[0,1]$ clamp가
+처리합니다.
 
 confidence **0.763**은 상한을 **Master**까지 엽니다.
 
@@ -366,6 +412,39 @@ overall 점수(53.0)가 Gold 구간에 들고, confidence 상한(Master)이 더 
 - GitHub confidence는 **대표 소유 프로젝트**도 함께 반영합니다 — 역사적으로 의미 있는 대표작이 있으면 최근 활동이 잠잠해도 상한이 낮게 묶이지 않습니다.
 - 한 분야가 강한 **단일 출처** 프로필(예: GitHub만)도 **Master**까지 도달할 수 있습니다.
 - 최고 티어 **Maru**는 오픈소스와 알고리즘 양쪽 모두 깊은 **멀티플랫폼 오각형**에만 주어집니다.
+
+## 저지별 반영 지점
+
+모든 저지는 같은 두 축에 **더하는 방식으로만** 반영됩니다.
+
+| 저지 | Problem Solving | Depth | trust | 포화점 | confidence 가중 |
+| --- | --- | --- | --- | --- | --- |
+| solved.ac / 백준 | 푼 문제 수 | 티어(`linScore`, $m=30$) + 난이도 가중 풀이 | 1.00 | 2200 | 0.25 |
+| LeetCode | 푼 문제 수 | 1200 초과분 콘테스트 레이팅 + hard 풀이 | 0.75 | 1400 | 0.15 |
+| 정올(JungOl) | 푼 문제 수 | 티어 × **0.80** + 난이도 가중 풀이 | 0.60 | 900 | 0.10 |
+
+정올은 solved.ac와 같은 0~30 티어 스케일을 씁니다(정올 스스로 티어를 solved.ac AC
+레이팅 기준으로 계산한다고 밝히고 있습니다). 그래서 난이도 밴드와 티어 이름을 그대로
+가져다 씁니다. 다만 문제 풀 규모가 백준보다 훨씬 작아 같은 티어라도 근거가 약하기
+때문에, 레이팅 신호에 **0.80** 보정을 곱합니다.
+
+Depth는 저지들의 레이팅 근거 중 **최댓값**을 쓰고 난이도 가중 풀이는 **합산**하므로,
+이 보정은 한쪽으로만 보수적으로 작용합니다. 즉 정올을 연결해서 점수가 내려가는 일은
+없습니다. Problem Solving(합산)과 confidence(가산)도 마찬가지입니다. trust가 0.60인
+이유는 데이터 출처가 정올 페이지가 이미 내려주는 `__data.json`이기 때문입니다. 공개된
+값이지만 문서화된 API가 아니라 프레임워크 내부 포맷입니다.
+
+## 지원하지 않는 플랫폼
+
+**프로그래머스**와 **코드트리**는 수집하지 않습니다. 아직 안 한 것이 아니라 하지 않기로
+정한 것입니다. 두 곳 모두 로그인 없이 볼 수 있는 공개 프로필이나 API가 없습니다.
+프로그래머스는 공개 프로필 페이지 자체를 없앴고 `robots.txt`로도 막아 뒀으며,
+코드트리는 `robots.txt`가 전체를 막고 API는 JWT를 요구합니다. SWEA는 모든 통계
+페이지가 로그인으로 넘어갑니다. 프로그래머스 이용약관은 크롤링·스크래핑도 금지합니다.
+
+커뮤니티에서 쓰는 우회 방법 — 계정 아이디와 비밀번호를 저장소 시크릿에 넣는 방식 —
+은 codemaru가 요구하지도, 지원하지도 않습니다. **codemaru는 플랫폼 자격증명이나
+쿠키, 세션을 다루지 않습니다.** 공개된 데이터만 읽습니다.
 
 ## 유의사항
 

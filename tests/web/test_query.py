@@ -33,3 +33,23 @@ def test_animate_rejects_garbage():
 def test_compact_still_defaults_false():
     _profile, options = _parse(compact=None)
     assert options.compact is False
+
+
+def test_jungol_is_parsed_onto_the_profile():
+    profile, _options = _parse(jungol="demo_handle")
+    assert profile.jungol == "demo_handle"
+
+
+def test_jungol_absent_stays_none():
+    profile, _options = _parse()
+    assert profile.jungol is None
+
+
+def test_blank_jungol_becomes_none():
+    profile, _options = _parse(jungol="   ")
+    assert profile.jungol is None
+
+
+def test_invalid_jungol_raises_a_named_query_error():
+    with pytest.raises(QueryError, match="jungol"):
+        _parse(jungol="bad handle")

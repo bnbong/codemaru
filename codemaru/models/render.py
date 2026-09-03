@@ -21,6 +21,3 @@ class RenderOptions(BaseModel):
     # nameplate. On by default; `animate=false` ships a static card. Respects
     # prefers-reduced-motion and degrades to the static card where CSS is ignored.
     animate: bool = True
-
-
-DEFAULT_RENDER_OPTIONS = RenderOptions()

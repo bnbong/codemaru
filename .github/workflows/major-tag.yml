@@ -1,0 +1,79 @@
+name: Move major version tag
+
+# The README and the hosted generator both tell users `uses: bnbong/codemaru@v1`,
+# which is the conventional way to consume a GitHub Action: a floating major tag
+# that always points at the newest compatible release, so consumers pick up
+# patches without editing their workflow. Only exact release tags (v1.0.0 … v1.2.1)
+# exist, so `@v1` resolves to nothing and every consumer workflow fails.
+#
+# This workflow keeps that floating tag honest: on each published release it
+# force-moves `v1` (derived from the release tag's major) onto the release commit.
+# Force-moving a tag is exactly what the convention requires — `v1` is a moving
+# pointer, not an immutable release marker; the exact `vX.Y.Z` tags stay untouched.
+#
+# NOTE: a floating tag can only be *moved*, not created, from here on a fresh repo
+# — the first `v1` must be pushed once by hand (see CONTRIBUTING/report) or by
+# running this workflow via workflow_dispatch with an existing tag.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to point the major tag at (e.g. v1.2.1)."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+# Two releases published back-to-back must not race to move the same tag; let an
+# in-flight run finish so the last one to complete wins deterministically.
+concurrency:
+  group: major-tag
+  cancel-in-progress: false
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    # A pre-release must not move the floating tag: `@v1` is what stable consumers
+    # get by default, so it may only ever point at a full release.
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Full history + tags: the release tag has to be resolvable locally to
+          # find the commit the major tag should point at.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Move major tag to the release commit
+        shell: bash
+        # The tag name is passed via env (not interpolated into the script) so a
+        # crafted tag can't break out into shell commands.
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          # Guard: only a plain `vMAJOR.MINOR.PATCH` release moves the major tag.
+          # Pre-release / build-metadata suffixes (v1.2.3-rc.1) are skipped, as is
+          # anything that isn't semver at all.
+          if [[ ! "$RELEASE_TAG" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::notice::'$RELEASE_TAG' is not a plain vX.Y.Z release tag — leaving the major tag alone."
+            exit 0
+          fi
+          major="v${BASH_REMATCH[1]}"
+
+          # Resolve the commit the release tag points at (works for both annotated
+          # and lightweight tags), rather than trusting the checked-out ref, which
+          # is the default branch on a manual dispatch.
+          if ! sha="$(git rev-list -n 1 "refs/tags/$RELEASE_TAG" 2>/dev/null)"; then
+            echo "::error::tag '$RELEASE_TAG' does not exist in this repository."
+            exit 1
+          fi
+
+          echo "Pointing $major at $RELEASE_TAG ($sha)"
+          git tag -f "$major" "$sha"
+          git push -f origin "refs/tags/$major"

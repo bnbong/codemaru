@@ -13,13 +13,13 @@ for de-duplication — never viewer IPs or headers (Camo hides viewers anyway).
 
 from __future__ import annotations
 
-import contextlib
 import time
 from typing import Any
 
 import httpx
 
 from codemaru.settings import get_settings
+from codemaru.telemetry import log_event
 
 # A single Redis HyperLogLog of distinct embedded-card handles; PFCOUNT is the
 # badge number. HLL trades ~0.8% counting error for a fixed ~12KB ceiling per key
@@ -100,15 +100,19 @@ async def record_embed(handle: str) -> None:
         return
     base, token = creds
     # Best-effort: a KV error/timeout must never break card rendering.
-    with contextlib.suppress(Exception):
+    try:
         await _command(base, token, "PFADD", _USERS_KEY, handle)
+    except Exception as exc:  # noqa: BLE001 - tracking is best-effort, never fatal
+        # Class name only: the message can carry the credentialed REST URL.
+        log_event("kv_error", op="pfadd", error=type(exc).__name__)
 
 
 async def _count(base: str, token: str, *command: str) -> int:
     """Run a counting command (PFCOUNT/SCARD), returning 0 on any failure."""
     try:
         return int(await _command(base, token, *command) or 0)
-    except Exception:  # noqa: BLE001 - tracking is best-effort, never fatal
+    except Exception as exc:  # noqa: BLE001 - tracking is best-effort, never fatal
+        log_event("kv_error", op=command[0].lower(), error=type(exc).__name__)
         return 0
 
 

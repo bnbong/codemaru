@@ -40,12 +40,32 @@
         <form class="panel" method="get" action="/" id="generator-form">
           <div class="field">
             <label for="github">GitHub username (required)</label>
-            <input id="github" name="github" value="{{ values.github }}" placeholder="octocat" />
+            <input
+              id="github"
+              name="github"
+              value="{{ values.github }}"
+              placeholder="octocat"
+              inputmode="text"
+              autocapitalize="none"
+              autocorrect="off"
+              autocomplete="off"
+              spellcheck="false"
+            />
           </div>
           <div class="row">
             <div class="field">
               <label for="boj">BOJ / solved.ac</label>
-              <input id="boj" name="boj" value="{{ values.boj }}" placeholder="optional" />
+              <input
+                id="boj"
+                name="boj"
+                value="{{ values.boj }}"
+                placeholder="optional"
+                inputmode="text"
+                autocapitalize="none"
+                autocorrect="off"
+                autocomplete="off"
+                spellcheck="false"
+              />
             </div>
             <div class="field">
               <label for="leetcode">LeetCode</label>
@@ -54,6 +74,27 @@
                 name="leetcode"
                 value="{{ values.leetcode }}"
                 placeholder="optional"
+                inputmode="text"
+                autocapitalize="none"
+                autocorrect="off"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+            <!-- .row wraps, so this third handle takes its own full-width line
+                 in the narrow panel instead of squeezing the other two. -->
+            <div class="field">
+              <label for="jungol">JungOl</label>
+              <input
+                id="jungol"
+                name="jungol"
+                value="{{ values.jungol }}"
+                placeholder="optional"
+                inputmode="text"
+                autocapitalize="none"
+                autocorrect="off"
+                autocomplete="off"
+                spellcheck="false"
               />
             </div>
           </div>
@@ -71,6 +112,13 @@
               <select id="compact" name="compact">
                 <option value="false" {% if not values.compact %}selected{% endif %}>default</option>
                 <option value="true" {% if values.compact %}selected{% endif %}>compact</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="animate">Animation</label>
+              <select id="animate" name="animate">
+                <option value="true" {% if values.animate %}selected{% endif %}>on</option>
+                <option value="false" {% if not values.animate %}selected{% endif %}>off</option>
               </select>
             </div>
           </div>
@@ -133,10 +181,7 @@
           <p class="note">
             {% if mode == "fixture" %}
             Fixture preview — sample data. Set <code>FIXTURE_MODE=false</code> for live GitHub /
-            solved.ac / LeetCode.
-            {% elif mode == "unavailable" %}
-            Live data is currently unavailable — the service is configured for live mode but no
-            adapters are ready.
+            solved.ac / LeetCode / JungOl.
             {% endif %}
             <span lang="ko">점수는 공개 활동을 요약한 것이지 절대적인 실력 평가가 아닙니다. Maru를 향해 달리세요.</span>
           </p>

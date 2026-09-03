@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # Failed/degraded (partial/unavailable) results are cached only briefly so a
     # transient outage isn't pinned for the full TTL.
     negative_cache_ttl_seconds: int = 60
+    # A GitHub handle that doesn't exist isn't a transient failure — retrying it
+    # every minute just burns GraphQL quota — so it gets its own, longer negative
+    # TTL. Still bounded, since a user can create the account later.
+    not_found_cache_ttl_seconds: int = 600
     # How long a last-successful summary is retained for stale fallback.
     stale_ttl_seconds: int = 86400
     # Per-request read budget for live adapters. GitHub's GraphQL query is
@@ -33,8 +37,24 @@ class Settings(BaseSettings):
     # ``unavailable``. 8s gives headroom while staying under the serverless cap;
     # pagination cost is bounded separately (repo-only follow-up pages).
     adapter_timeout_seconds: float = 8.0
-
-    redis_url: str | None = None
+    # Ceiling on ONE whole card build, shared by every platform fetch — unlike
+    # adapter_timeout_seconds, which each *request* gets to itself. GitHub
+    # paginates sequentially (page 1 on the full budget, follow-ups 3s each), so
+    # without this the worst case runs well past a serverless function's limit,
+    # and a killed function returns no error card and writes no negative cache
+    # entry. On expiry the finished platforms are kept and the rest degrade to
+    # `unavailable`, so the card still renders (as partial).
+    #
+    # This bounds the *fetch phase only*. get_summary brackets it with KV calls —
+    # one cache read before, then a stale read/write and the cache write after —
+    # each bounded by kv_timeout_seconds, so the request's worst case is
+    #
+    #     kv_timeout_seconds + card_build_timeout_seconds + 2 * kv_timeout_seconds
+    #
+    # and THAT sum must stay under the platform's function timeout (Vercel's
+    # default is 10s), with room left for scoring, rendering and the response.
+    # At the defaults: 1 + 6 + 2 = 9s. Raise this only by lowering something else.
+    card_build_timeout_seconds: float = 6.0
 
     # Vercel deployment environment (production / preview / development), injected
     # automatically as VERCEL_ENV. Namespaces the shared cache so a preview deploy

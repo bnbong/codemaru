@@ -8,11 +8,13 @@ maps cleanly to ``unavailable`` and never breaks the card.
 from __future__ import annotations
 
 from datetime import datetime
+from time import monotonic
 from typing import Any
 
 import httpx
 
 from codemaru.models.snapshot import LeetCodeSnapshot, LeetCodeSolved, PlatformStatus
+from codemaru.telemetry import log_adapter
 
 GRAPHQL_URL = "https://leetcode.com/graphql"
 
@@ -28,7 +30,11 @@ query($username: String!) {
 """
 
 
-def _unavailable(username: str, note: str, fetched_at: datetime) -> LeetCodeSnapshot:
+def unavailable_snapshot(username: str, note: str, fetched_at: datetime) -> LeetCodeSnapshot:
+    """An all-zero snapshot standing in for data this platform could not supply.
+
+    Public so the service layer can substitute one when the card-build budget
+    cuts a fetch short, without duplicating the field list."""
     return LeetCodeSnapshot(
         status=PlatformStatus.UNAVAILABLE,
         fetched_at=fetched_at,
@@ -74,6 +80,20 @@ async def fetch_leetcode(
     client: httpx.AsyncClient,
 ) -> LeetCodeSnapshot:
     """Fetch a LeetCode snapshot, mapping any failure to ``unavailable``."""
+    # A thin wrapper around the real fetch so every exit path — ok, unavailable —
+    # is logged from one place.
+    started = monotonic()
+    snapshot = await _fetch_leetcode(username, fetched_at=fetched_at, client=client)
+    log_adapter("leetcode", username, status=snapshot.status, note=snapshot.note, started=started)
+    return snapshot
+
+
+async def _fetch_leetcode(
+    username: str,
+    *,
+    fetched_at: datetime,
+    client: httpx.AsyncClient,
+) -> LeetCodeSnapshot:
     try:
         resp = await client.post(
             GRAPHQL_URL,
@@ -81,10 +101,10 @@ async def fetch_leetcode(
             headers={"Referer": "https://leetcode.com", "Content-Type": "application/json"},
         )
         if resp.status_code != 200:
-            return _unavailable(username, f"http {resp.status_code}", fetched_at)
+            return unavailable_snapshot(username, f"http {resp.status_code}", fetched_at)
         data = (resp.json() or {}).get("data") or {}
         if data.get("matchedUser") is None:
-            return _unavailable(username, "user not found", fetched_at)
+            return unavailable_snapshot(username, "user not found", fetched_at)
         return parse_leetcode(data, username, fetched_at)
     except Exception:  # noqa: BLE001 - degrade gracefully on any network/schema error
-        return _unavailable(username, "request failed", fetched_at)
+        return unavailable_snapshot(username, "request failed", fetched_at)

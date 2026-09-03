@@ -15,31 +15,41 @@ kept, distribution zeroed); any other failure degrades to ``unavailable``.
 from __future__ import annotations
 
 from datetime import datetime
+from time import monotonic
 from typing import Any
 
 from curl_cffi.requests import AsyncSession
 
+# The difficulty-band table moved to adapters/tiers.py so judges sharing the
+# solved.ac tier scale can reuse it. Re-exported here so existing imports of
+# ``solvedac.parse_difficulty`` (and the private helpers) keep working.
+from codemaru.adapters.tiers import _BANDS, _band_for, parse_difficulty
 from codemaru.models.snapshot import (
-    DifficultyDistribution,
     PlatformStatus,
     SolvedAcSnapshot,
 )
+from codemaru.telemetry import log_adapter
 
 SHOW_URL = "https://solved.ac/api/v3/user/show"
 STATS_URL = "https://solved.ac/api/v3/user/problem_stats"
 
-# solved.ac level → coarse difficulty band (level 0 is Unrated and ignored).
-_BANDS = [
-    (1, 5, "bronze"),
-    (6, 10, "silver"),
-    (11, 15, "gold"),
-    (16, 20, "platinum"),
-    (21, 25, "diamond"),
-    (26, 30, "ruby"),
+__all__ = [
+    "SHOW_URL",
+    "STATS_URL",
+    "_BANDS",
+    "_band_for",
+    "fetch_solvedac",
+    "parse_difficulty",
+    "parse_solvedac",
+    "unavailable_snapshot",
 ]
 
 
-def _unavailable(handle: str, note: str, fetched_at: datetime) -> SolvedAcSnapshot:
+def unavailable_snapshot(handle: str, note: str, fetched_at: datetime) -> SolvedAcSnapshot:
+    """An all-zero snapshot standing in for data this platform could not supply.
+
+    Public so the service layer can substitute one when the card-build budget
+    cuts a fetch short, without duplicating the field list."""
     return SolvedAcSnapshot(
         status=PlatformStatus.UNAVAILABLE,
         fetched_at=fetched_at,
@@ -50,23 +60,6 @@ def _unavailable(handle: str, note: str, fetched_at: datetime) -> SolvedAcSnapsh
         solved_count=0,
         class_level=0,
     )
-
-
-def _band_for(level: int) -> str | None:
-    for low, high, name in _BANDS:
-        if low <= level <= high:
-            return name
-    return None
-
-
-def parse_difficulty(stats: list[dict[str, Any]]) -> DifficultyDistribution:
-    """Sum solved counts per difficulty band from the problem_stats payload."""
-    totals = {name: 0 for _, _, name in _BANDS}
-    for entry in stats:
-        band = _band_for(int(entry.get("level", 0)))
-        if band is not None:
-            totals[band] += int(entry.get("solved", 0))
-    return DifficultyDistribution(**totals)
 
 
 def parse_solvedac(
@@ -110,15 +103,29 @@ async def fetch_solvedac(
     Uses its own curl_cffi session (browser-impersonating TLS) rather than the
     shared httpx client, since httpx is blocked by Cloudflare here.
     """
+    # A thin wrapper around the real fetch so every exit path — ok, partial,
+    # unavailable — is logged from one place.
+    started = monotonic()
+    snapshot = await _fetch_solvedac(handle, fetched_at=fetched_at, timeout=timeout)
+    log_adapter("solvedac", handle, status=snapshot.status, note=snapshot.note, started=started)
+    return snapshot
+
+
+async def _fetch_solvedac(
+    handle: str,
+    *,
+    fetched_at: datetime,
+    timeout: float,
+) -> SolvedAcSnapshot:
     try:
         # impersonate a real Chrome TLS/JA3 fingerprint to pass Cloudflare.
         async with AsyncSession(impersonate="chrome", timeout=timeout) as session:
             show_resp = await session.get(SHOW_URL, params={"handle": handle})
             if show_resp.status_code != 200:
-                return _unavailable(handle, f"http {show_resp.status_code}", fetched_at)
+                return unavailable_snapshot(handle, f"http {show_resp.status_code}", fetched_at)
             show = show_resp.json()
             if not isinstance(show, dict) or "tier" not in show:
-                return _unavailable(handle, "unexpected response", fetched_at)
+                return unavailable_snapshot(handle, "unexpected response", fetched_at)
 
             # The distribution is best-effort; a failure still yields an ok profile.
             stats: list[dict[str, Any]] | None = None
@@ -131,4 +138,4 @@ async def fetch_solvedac(
 
             return parse_solvedac(show, stats, handle, fetched_at)
     except Exception:  # noqa: BLE001 - degrade gracefully on any network/schema error
-        return _unavailable(handle, "request failed", fetched_at)
+        return unavailable_snapshot(handle, "request failed", fetched_at)

@@ -1,0 +1,67 @@
+name: Action smoke test
+
+# CI exercises the library and the CLI, but never the composite action itself, so
+# a broken `action.yml` (bad pin, renamed input, install step that no longer
+# resolves) only surfaces in consumers' repos after a release. This runs the
+# action straight from the checkout on every change that could break it.
+#
+# Deliberately GitHub-only: no `boj` / `leetcode` inputs, so the run makes no
+# third-party calls and needs no secrets — the workflow's own GITHUB_TOKEN is
+# enough for the GitHub GraphQL API the generator reads.
+
+on:
+  pull_request:
+    paths:
+      - "action.yml"
+      - "codemaru/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "requirements.txt"
+      - ".github/workflows/action-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "action.yml"
+      - "codemaru/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "requirements.txt"
+      - ".github/workflows/action-smoke.yml"
+
+concurrency:
+  group: action-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Generate a card with the composite action
+        uses: ./
+        with:
+          github: octocat
+          out: out/codemaru.svg
+
+      - name: Verify the generated card
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f out/codemaru.svg || { echo "::error::action produced no out/codemaru.svg"; exit 1; }
+
+          # Must be a real SVG document, not an error page or an empty file.
+          head -c 4 out/codemaru.svg | grep -q '^<svg' \
+            || { echo "::error::out/codemaru.svg does not start with '<svg'"; exit 1; }
+
+          # A full card with outlined fonts is around 120 KB; anything far past
+          # that means glyph de-duplication regressed and READMEs would crawl.
+          bytes=$(wc -c < out/codemaru.svg)
+          echo "card size: ${bytes} bytes"
+          if [ "$bytes" -gt 409600 ]; then
+            echo "::error::out/codemaru.svg is ${bytes} bytes, over the 400 KB ceiling"
+            exit 1
+          fi
