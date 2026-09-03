@@ -32,7 +32,64 @@ def test_svg_has_locked_down_csp(client: TestClient):
     res = client.get("/api/card.svg", params={"github": "octocat"})
     assert res.status_code == 200
     assert res.headers["x-content-type-options"] == "nosniff"
-    assert res.headers["content-security-policy"] == "default-src 'none'; style-src 'unsafe-inline'"
+    # `img-src data:` is required, not optional: the tier nameplate is an embedded
+    # base64 PNG, and without the directive it silently vanishes when the card URL
+    # is opened directly in a browser tab.
+    assert (
+        res.headers["content-security-policy"]
+        == "default-src 'none'; img-src data:; style-src 'unsafe-inline'"
+    )
+
+
+def _directives(csp: str) -> dict[str, str]:
+    return {part.split()[0]: part.strip() for part in csp.split(";") if part.strip()}
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc"])
+def test_docs_csp_allows_the_swagger_cdn(client: TestClient, path: str):
+    # Swagger UI / ReDoc load their bundles from jsDelivr, so the generator's
+    # `script-src 'self'` renders these pages blank. Assert whole directives (not
+    # substrings) so a missing origin can't pass on a partial match.
+    res = client.get(path)
+    assert res.status_code == 200
+    directives = _directives(res.headers["content-security-policy"])
+    # 'unsafe-inline' is required, not incidental: FastAPI's get_swagger_ui_html
+    # boots Swagger UI from an inline <script> and exposes no nonce hook, so
+    # without it /docs loads the bundle and then renders a blank page.
+    assert directives["script-src"] == "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
+    # ReDoc also pulls Montserrat/Roboto from Google Fonts, so its stylesheet and
+    # font origins ride along — the same pair the generator page already allows.
+    assert directives["style-src"] == (
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com"
+    )
+    assert directives["font-src"] == "font-src 'self' https://fonts.gstatic.com"
+    assert directives["img-src"] == "img-src 'self' data: https://fastapi.tiangolo.com"
+    assert directives["connect-src"] == "connect-src 'self'"
+    assert directives["frame-ancestors"] == "frame-ancestors 'none'"
+
+
+def test_docs_page_actually_renders_swagger_ui(client: TestClient):
+    # The header assertions above only prove the policy; this proves the route is
+    # served under it — the page's inline bootstrap and the widened CSP together
+    # are what make /docs non-blank.
+    res = client.get("/docs")
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/html")
+    assert "SwaggerUIBundle" in res.text
+    assert "<script>" in res.text  # the inline bootstrap 'unsafe-inline' is for
+    directives = _directives(res.headers["content-security-policy"])
+    assert "'unsafe-inline'" in directives["script-src"]
+    assert "https://cdn.jsdelivr.net" in directives["script-src"]
+
+
+def test_generator_page_csp_is_not_widened_by_the_docs_policy(client: TestClient):
+    # The docs exception is scoped to the docs paths; the generator — the one page
+    # that renders user-supplied handles — keeps its strict same-origin script
+    # policy, with no inline scripts allowed.
+    directives = _directives(client.get("/").headers["content-security-policy"])
+    assert directives["script-src"] == "script-src 'self'"
+    assert "'unsafe-inline'" not in directives["script-src"]
+    assert "cdn.jsdelivr.net" not in directives["style-src"]
 
 
 def test_json_gets_nosniff_only(client: TestClient):

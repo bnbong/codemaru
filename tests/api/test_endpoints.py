@@ -11,6 +11,63 @@ def test_health(client: TestClient):
     assert "scoreVersion" in body
 
 
+def test_health_reports_deploy_facts(client: TestClient):
+    from codemaru import __version__
+
+    body = client.get("/api/health").json()
+    assert body["version"] == __version__
+    assert body["kv"] == "unconfigured"  # neutralized by the test settings fixture
+    assert body["githubToken"] in ("configured", "unconfigured")
+    assert isinstance(body["cacheEntries"], int)
+    # The KV round-trip is opt-in, so an uptime monitor on the plain endpoint is
+    # never affected by a KV outage.
+    assert "kvPing" not in body
+
+
+def test_health_reports_token_presence_without_leaking_it(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    from codemaru.settings import get_settings
+
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_supersecretvalue")
+    get_settings.cache_clear()
+    res = client.get("/api/health")
+    assert res.json()["githubToken"] == "configured"
+    assert "ghp_supersecretvalue" not in res.text  # presence only, never the value
+
+
+def test_health_counts_cache_entries(client: TestClient):
+    before = client.get("/api/health").json()["cacheEntries"]
+    client.get("/api/card.svg", params={"github": "octocat"})
+    assert client.get("/api/health").json()["cacheEntries"] > before
+
+
+def test_health_deep_reports_unconfigured_kv(client: TestClient):
+    body = client.get("/api/health", params={"deep": "true"}).json()
+    assert body["kvPing"] == "unconfigured"
+
+
+def test_health_deep_reports_kv_ok(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    async def ping(base: str, token: str, *args: str) -> str:
+        assert args == ("PING",)
+        return "PONG"
+
+    monkeypatch.setattr("codemaru.kv.credentials", lambda: ("https://kv.example", "tok"))
+    monkeypatch.setattr("codemaru.kv.command", ping)
+    assert client.get("/api/health", params={"deep": "true"}).json()["kvPing"] == "ok"
+
+
+def test_health_deep_survives_a_kv_outage(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    async def boom(*_args: object) -> object:
+        raise RuntimeError("kv down")
+
+    monkeypatch.setattr("codemaru.kv.credentials", lambda: ("https://kv.example", "tok"))
+    monkeypatch.setattr("codemaru.kv.command", boom)
+    body = client.get("/api/health", params={"deep": "true"}).json()
+    assert body["kvPing"] == "error"
+    assert body["status"] == "ok"  # the probe reports, it never fails the endpoint
+
+
 def test_favicon_redirects_to_logo(client: TestClient):
     res = client.get("/favicon.ico", follow_redirects=False)
     assert res.status_code in (307, 308)
@@ -139,10 +196,51 @@ def test_card_svg_invalid_compact_returns_error_card(client: TestClient):
     assert "compact" in res.text
 
 
+def test_card_svg_error_card_keeps_the_compact_dimensions(client: TestClient):
+    # A compact embed reserves 250x270 in the README; a 640x300 error card there
+    # would blow out the layout.
+    res = client.get("/api/card.svg", params={"github": "bad_name", "compact": "true"})
+    assert res.headers["x-codemaru-error"] == "true"
+    assert 'viewBox="0 0 250 270"' in res.text
+
+
+def test_card_svg_error_card_defaults_to_the_full_size(client: TestClient):
+    res = client.get("/api/card.svg", params={"github": "bad_name"})
+    assert res.headers["x-codemaru-error"] == "true"
+    assert 'viewBox="0 0 640 300"' in res.text
+
+
+def test_card_svg_unexpected_error_returns_error_card_not_500(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    # An uncaught exception would be a FastAPI 500 -> a broken image in a README.
+    async def boom(profile: object) -> object:
+        raise RuntimeError("something internal exploded")
+
+    monkeypatch.setattr("codemaru.web.routes.get_summary", boom)
+    res = client.get("/api/card.svg", params={"github": "octocat"})
+    assert res.status_code == 200
+    assert res.headers["x-codemaru-error"] == "true"
+    assert res.headers["cache-control"] == "no-store"  # retried on the next request
+    assert "temporarily unavailable" in res.text
+    assert "something internal exploded" not in res.text  # internals never leak
+
+
+def test_card_svg_unexpected_error_keeps_compact(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    async def boom(profile: object) -> object:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("codemaru.web.routes.get_summary", boom)
+    res = client.get("/api/card.svg", params={"github": "octocat", "compact": "true"})
+    assert 'viewBox="0 0 250 270"' in res.text
+
+
 def test_summary_json_valid(client: TestClient):
     res = client.get(
         "/api/summary.json",
-        params={"github": "octocat", "boj": "baek", "leetcode": "lc"},
+        params={"github": "octocat", "boj": "baek", "leetcode": "lc", "jungol": "jo"},
     )
     assert res.status_code == 200
     data = res.json()
@@ -162,6 +260,19 @@ def test_summary_json_invalid_compact_returns_400(client: TestClient):
     res = client.get("/api/summary.json", params={"github": "octocat", "compact": "maybe"})
     assert res.status_code == 400
     assert "compact" in res.json()["error"]
+
+
+def test_summary_json_does_not_swallow_unexpected_errors(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    # Deliberately unlike the card: a JSON 500 is honest and easier to debug, and
+    # no README renders it as a broken image.
+    async def boom(profile: object) -> object:
+        raise RuntimeError("something internal exploded")
+
+    monkeypatch.setattr("codemaru.web.routes.get_summary", boom)
+    with pytest.raises(RuntimeError):
+        client.get("/api/summary.json", params={"github": "octocat"})
 
 
 def test_summary_json_ignores_unknown_params(client: TestClient):
@@ -193,8 +304,59 @@ def test_index_invalid_input_shows_error(client: TestClient):
     assert "github" in res.text
 
 
+def test_index_accepts_animate_and_carries_it_into_the_snippets(client: TestClient):
+    res = client.get("/", params={"github": "octocat", "animate": "false"})
+    assert res.status_code == 200
+    # Both the live preview and the copyable embed snippets must reflect the
+    # opt-out, or the generator would show something the README won't produce.
+    assert "/api/card.svg?github=octocat&amp;animate=false" in res.text
+
+
+def test_index_animation_defaults_to_on(client: TestClient):
+    res = client.get("/", params={"github": "octocat"})
+    assert res.status_code == 200
+    # Animation is the default, so it never rides in the URL.
+    assert "animate=false" not in res.text
+
+
 # --- fixture-vs-live mode reporting (orchestration tests live in test_live_mode) ---
 
 
 def test_health_reports_live_when_fixture_mode_off(client: TestClient, live_mode: None):
     assert client.get("/api/health").json()["mode"] == "live"
+
+
+def test_summary_json_reports_jungol_input_and_snapshot(client: TestClient):
+    res = client.get("/api/summary.json", params={"github": "octocat", "jungol": "jo"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["input"]["jungol"] == "jo"
+    assert data["snapshots"]["jungol"]["handle"] == "jo"
+
+
+def test_summary_json_rejects_an_invalid_jungol_handle(client: TestClient):
+    res = client.get("/api/summary.json", params={"github": "octocat", "jungol": "bad handle"})
+    assert res.status_code == 400
+    assert "jungol" in res.json()["error"]
+
+
+def test_card_svg_accepts_a_jungol_handle(client: TestClient):
+    res = client.get("/api/card.svg", params={"github": "octocat", "jungol": "jo"})
+    assert res.status_code == 200
+    assert "x-codemaru-error" not in res.headers
+    assert res.text.startswith("<svg")
+
+
+def test_index_renders_a_jungol_field_carrying_the_submitted_value(client: TestClient):
+    res = client.get("/", params={"github": "octocat", "jungol": "jo"})
+    assert res.status_code == 200
+    assert 'id="jungol"' in res.text
+    assert 'value="jo"' in res.text
+    assert "jungol=jo" in res.text  # the preview URL and the copy snippets
+
+
+def test_index_demo_prefills_the_jungol_handle(client: TestClient):
+    from codemaru.fixtures.demo import DEMO_INPUT
+
+    res = client.get("/")
+    assert f'value="{DEMO_INPUT.jungol}"' in res.text

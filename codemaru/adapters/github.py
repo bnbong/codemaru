@@ -6,24 +6,50 @@ past-year contribution data. A token is required; without one the snapshot is
 
 Repositories are paginated so ``total_stars``/``total_forks``/``language_count``
 reflect every owned non-fork repo, not just the top page — bounded by
-``MAX_REPO_PAGES`` to cap request cost. Parsing lives in pure functions so it can
-be tested against saved payloads.
+``MAX_REPO_PAGES`` to cap request cost, and by an optional ``deadline`` so a
+multi-page profile yields the pages it managed rather than blowing the whole
+card-build budget. Parsing lives in pure functions so it can be tested against
+saved payloads.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from time import monotonic
 from typing import Any
 
 import httpx
 
 from codemaru.models.snapshot import GitHubSnapshot, PlatformStatus
+from codemaru.telemetry import log_adapter
 
 GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
 
 # Hard cap on repository pages (100 repos/page). 500 repos is far into the tail
 # where additional repos contribute negligible stars/forks.
 MAX_REPO_PAGES = 5
+
+# Note attached when the GraphQL query resolves no such user. A module constant
+# because ``codemaru.service`` matches on it to give a missing handle its own,
+# longer negative cache TTL — a literal duplicated there would drift.
+NOT_FOUND_NOTE = "user not found"
+
+# Upper bound on one follow-up repo page: ``_REPOS_QUERY`` is light, and the
+# total card build must stay within the serverless budget. A slow tail page
+# degrades to a partial snapshot fast instead of eating the whole request. The
+# actual per-page timeout is the smaller of this and what is left of the build
+# deadline (see ``_page_timeout``).
+MAX_FOLLOWUP_PAGE_TIMEOUT = 3.0
+
+# Headroom subtracted from the remaining budget when sizing a page's timeout, so
+# the page gives up fractionally before the outer deadline does — that deadline
+# cancels the *whole* fetch, page 1 included.
+_PAGE_START_MARGIN = 0.25
+
+# Below this much remaining budget a follow-up page isn't worth starting: the
+# timeout it could be given is too short to plausibly complete, and a page that
+# is cut off yields nothing while still costing GraphQL quota.
+_MIN_PAGE_BUDGET = 1.0
 
 _QUERY = """
 query($login: String!, $cursor: String) {
@@ -85,7 +111,24 @@ query($login: String!, $cursor: String) {
 """
 
 
-def _unavailable(login: str, note: str, fetched_at: datetime) -> GitHubSnapshot:
+class _PageStatusError(Exception):
+    """A GraphQL response that wasn't 200, carrying the status for classification.
+
+    Raised instead of returning a sentinel so the caller cannot confuse "the API
+    refused the request" with "the API answered, and there is no such user" —
+    the two get different notes and, downstream, very different cache TTLs.
+    """
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"http {status_code}")
+        self.status_code = status_code
+
+
+def unavailable_snapshot(login: str, note: str, fetched_at: datetime) -> GitHubSnapshot:
+    """An all-zero snapshot standing in for data this platform could not supply.
+
+    Public so the service layer can substitute one when the card-build budget
+    cuts a fetch short, without duplicating the field list."""
     return GitHubSnapshot(
         status=PlatformStatus.UNAVAILABLE,
         fetched_at=fetched_at,
@@ -214,32 +257,93 @@ def parse_github(user: dict[str, Any], login: str, fetched_at: datetime) -> GitH
     )
 
 
+def _page_timeout(deadline: float | None) -> httpx.Timeout | None:
+    """Timeout for the next follow-up page, or ``None`` to stop paginating.
+
+    Sized from what is actually left of the shared build budget rather than from
+    a fixed constant: a request can spend its wall clock in any phase (connect,
+    write, read, pool), so bounding one phase leaves the others free to outrun
+    the deadline — and that deadline cancels the entire GitHub fetch, discarding
+    page 1 too. The single number therefore applies to every phase.
+    """
+    if deadline is None:
+        return httpx.Timeout(MAX_FOLLOWUP_PAGE_TIMEOUT)
+    remaining = deadline - monotonic()
+    if remaining < _MIN_PAGE_BUDGET:
+        return None
+    return httpx.Timeout(min(MAX_FOLLOWUP_PAGE_TIMEOUT, remaining - _PAGE_START_MARGIN))
+
+
 async def fetch_github(
     login: str,
     *,
     token: str | None,
     fetched_at: datetime,
     client: httpx.AsyncClient,
+    deadline: float | None = None,
 ) -> GitHubSnapshot:
-    """Fetch a GitHub snapshot, paginating repos and degrading on failure."""
+    """Fetch a GitHub snapshot, paginating repos and degrading on failure.
+
+    ``deadline`` is a ``time.monotonic()`` instant shared with the rest of the
+    card build. Pagination is sequential, so it is checked cooperatively before
+    each follow-up page: running out of time stops the loop with the pages
+    already aggregated rather than losing the fetch to a cancellation. Page 1 is
+    never skipped — without it there is no snapshot at all.
+    """
+    # A thin wrapper around the real fetch so every exit path — ok, partial,
+    # unavailable — is logged from one place.
+    started = monotonic()
+    snapshot = await _fetch_github(
+        login, token=token, fetched_at=fetched_at, client=client, deadline=deadline
+    )
+    log_adapter("github", login, status=snapshot.status, note=snapshot.note, started=started)
+    return snapshot
+
+
+async def _fetch_github(
+    login: str,
+    *,
+    token: str | None,
+    fetched_at: datetime,
+    client: httpx.AsyncClient,
+    deadline: float | None,
+) -> GitHubSnapshot:
     if not token:
-        return _unavailable(login, "GITHUB_TOKEN not configured", fetched_at)
+        return unavailable_snapshot(login, "GITHUB_TOKEN not configured", fetched_at)
     headers = {"Authorization": f"bearer {token}"}
 
-    async def _page(cursor: str | None, *, query: str = _QUERY) -> dict[str, Any] | None:
+    async def _page(
+        cursor: str | None,
+        *,
+        query: str = _QUERY,
+        timeout: httpx.Timeout | None = None,
+    ) -> dict[str, Any] | None:
+        """Fetch one page; ``timeout=None`` uses the client's own budget."""
+        timeout_arg = timeout if timeout is not None else httpx.USE_CLIENT_DEFAULT
         resp = await client.post(
             GITHUB_GRAPHQL_URL,
             json={"query": query, "variables": {"login": login, "cursor": cursor}},
             headers=headers,
+            timeout=timeout_arg,
         )
         if resp.status_code != 200:
-            return None
+            raise _PageStatusError(resp.status_code)
         return (resp.json().get("data") or {}).get("user")
 
     try:
-        first = await _page(None)
+        try:
+            first = await _page(None)
+        except _PageStatusError as exc:
+            # An HTTP failure is about the *request*, not the handle: an expired
+            # token (401), a rate limit (403) or a GitHub outage (5xx) says
+            # nothing about whether this user exists. Reporting it as
+            # NOT_FOUND_NOTE would earn it the long not-found cache TTL and pin
+            # the outage on every handle that asked during it.
+            return unavailable_snapshot(login, f"http {exc.status_code}", fetched_at)
         if first is None:
-            return _unavailable(login, "user not found", fetched_at)
+            # HTTP 200 with ``data.user: null`` — GraphQL's "Could not resolve to
+            # a User". This one really is a stable answer about the handle.
+            return unavailable_snapshot(login, NOT_FOUND_NOTE, fetched_at)
 
         repos = first.get("repositories", {})
         first_nodes = repos.get("nodes", []) or []
@@ -253,8 +357,23 @@ async def fetch_github(
 
         pages = 1
         page_failed = False
+        budget_stopped = False
         while page_info.get("hasNextPage") and pages < MAX_REPO_PAGES:
-            nxt = await _page(page_info.get("endCursor"), query=_REPOS_QUERY)
+            page_timeout = _page_timeout(deadline)
+            if page_timeout is None:
+                budget_stopped = True
+                break
+            try:
+                nxt = await _page(
+                    page_info.get("endCursor"),
+                    query=_REPOS_QUERY,
+                    timeout=page_timeout,
+                )
+            except Exception:  # noqa: BLE001 - a timeout/network error/non-200 on
+                # a later page is just a failed page: keep the first page
+                # (followers, contributions, top repos) instead of discarding the
+                # whole fetch.
+                nxt = None
             if nxt is None:  # a later page failed — keep what we have
                 page_failed = True
                 break
@@ -269,6 +388,15 @@ async def fetch_github(
         if page_failed:
             # Genuine incompleteness from an error → partial (may stale-fall-back).
             partial, note = True, "repository data incomplete (a page failed to load)"
+        elif budget_stopped:
+            # Out of time, not broken: everything fetched so far is current data,
+            # and repos are stars-desc so the unread tail contributes ~nothing.
+            # Stays ok, exactly like hitting the page cap.
+            partial, note = (
+                False,
+                f"aggregated top {pages * 100} repositories by stars "
+                "(pagination stopped for the time budget)",
+            )
         elif page_info.get("hasNextPage"):
             # Hit the intentional cap on a successful fetch → still ok, just noted.
             # Repos are ordered by stars desc, so the tail contributes ~nothing.
@@ -291,4 +419,4 @@ async def fetch_github(
             note=note,
         )
     except Exception:  # noqa: BLE001 - degrade gracefully on any network/schema error
-        return _unavailable(login, "request failed", fetched_at)
+        return unavailable_snapshot(login, "request failed", fetched_at)

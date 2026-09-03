@@ -6,7 +6,8 @@ snapshot is present, so a GitHub-only user still gets meaningful Open Source /
 Impact / Consistency scores.
 
 Bump ``SCORE_VERSION`` whenever any formula here, in confidence.py, or tier.py
-changes, and refresh the affected tests.
+changes — and also when a judge is added to the registry, since a new handle
+segment changes every cache key anyway — then refresh the affected tests.
 """
 
 from __future__ import annotations
@@ -15,14 +16,9 @@ from codemaru.core.confidence import compute_confidence
 from codemaru.core.normalization import linear_score, log_score, round_to, weighted_average
 from codemaru.core.tier import compute_tier
 from codemaru.models.score import Axis, AxisScores, NormalizedScores
-from codemaru.models.snapshot import (
-    GitHubSnapshot,
-    LeetCodeSnapshot,
-    SnapshotBundle,
-    SolvedAcSnapshot,
-)
+from codemaru.models.snapshot import GitHubSnapshot, JudgeView, SnapshotBundle
 
-SCORE_VERSION = "0.3.0"
+SCORE_VERSION = "0.4.0"
 
 # Overall-score axis weights (mirrors the documented formula).
 AXIS_WEIGHTS: dict[Axis, float] = {
@@ -75,7 +71,7 @@ def _consistency(gh: GitHubSnapshot | None) -> float:
     )
 
 
-def _problem_solving(sa: SolvedAcSnapshot | None, lc: LeetCodeSnapshot | None) -> float:
+def _problem_solving(judges: list[JudgeView]) -> float:
     """Total problems solved across judges, summed then saturated once.
 
     Counts are SUMMED (not averaged across platforms), so linking another judge
@@ -83,42 +79,27 @@ def _problem_solving(sa: SolvedAcSnapshot | None, lc: LeetCodeSnapshot | None) -
     never dilutes an established profile. Every solve is worth the same regardless
     of platform; difficulty is handled separately by ``_depth``.
     """
-    total = 0
-    has_judge = False
-    if sa is not None and sa.usable:
-        total += sa.solved_count
-        has_judge = True
-    if lc is not None and lc.usable:
-        total += lc.solved.easy + lc.solved.medium + lc.solved.hard
-        has_judge = True
-    if not has_judge:
+    usable = [j for j in judges if j.usable]
+    if not usable:
         return 0.0
-    return log_score(total, 2500)
+    return log_score(sum(j.solved_count for j in usable), 2500)
 
 
-def _algo_depth(sa: SolvedAcSnapshot | None, lc: LeetCodeSnapshot | None) -> float:
+def _algo_depth(judges: list[JudgeView]) -> float:
     """Algorithmic problem-solving depth from judges (0 when none present).
 
     Rating evidence (BOJ tier vs LeetCode contest) is the BEST across judges
     (max, counted only when > 0); hard-problem volume is SUMMED. Adding a judge
-    never lowers it.
+    never lowers it. Each platform's own formula lives in its ``judge_view()``.
     """
+    usable = [j for j in judges if j.usable]
     components: list[tuple[float, float]] = []
 
-    ratings: list[float] = []
-    if sa is not None and sa.usable:
-        ratings.append(linear_score(sa.tier, 30))
-    if lc is not None and lc.usable and lc.contest_rating is not None and lc.contest_rating > 0:
-        ratings.append(linear_score(lc.contest_rating - 1200, 2000))
+    ratings = [j.rating_evidence for j in usable if j.rating_evidence is not None]
     if ratings and max(ratings) > 0:
         components.append((max(ratings), 0.5))
 
-    hard = 0.0
-    if sa is not None and sa.usable:
-        d = sa.difficulty
-        hard += d.gold * 0.3 + d.platinum * 1 + d.diamond * 2 + d.ruby * 3
-    if lc is not None and lc.usable:
-        hard += lc.solved.hard
+    hard = sum(j.hard_volume for j in usable)
     if hard > 0:
         components.append((log_score(hard, 400), 0.5))
 
@@ -143,11 +124,7 @@ def _project_depth(gh: GitHubSnapshot | None) -> float:
     )
 
 
-def _depth(
-    gh: GitHubSnapshot | None,
-    sa: SolvedAcSnapshot | None,
-    lc: LeetCodeSnapshot | None,
-) -> float:
+def _depth(gh: GitHubSnapshot | None, judges: list[JudgeView]) -> float:
     """Depth = how deep the coder is — provable via *algorithms* OR via a
     *significant built project*, plus a little *technical breadth*.
 
@@ -156,20 +133,20 @@ def _depth(
     never drags a strong one down — e.g. a polyglot dabbler with no flagship and
     no judge data no longer outranks the author of a hugely-starred project.
     """
-    primary = max(_algo_depth(sa, lc), _project_depth(gh))
+    primary = max(_algo_depth(judges), _project_depth(gh))
     breadth = log_score(gh.language_count, 12) if (gh is not None and gh.usable) else 0.0
     return round_to(primary + (100 - primary) * 0.15 * (breadth / 100), 1)
 
 
 def compute_axis_scores(bundle: SnapshotBundle) -> AxisScores:
     """Compute all five axis scores from a snapshot bundle."""
-    gh, sa, lc = bundle.github, bundle.solvedac, bundle.leetcode
+    gh, judges = bundle.github, bundle.judges()
     return AxisScores(
         open_source=_open_source(gh),
         impact=_impact(gh),
         consistency=_consistency(gh),
-        problem_solving=_problem_solving(sa, lc),
-        depth=_depth(gh, sa, lc),
+        problem_solving=_problem_solving(judges),
+        depth=_depth(gh, judges),
     )
 
 

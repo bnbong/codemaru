@@ -7,30 +7,26 @@ cannot reach the top tiers. It stays in ``/api/summary.json`` for transparency.
 
 from __future__ import annotations
 
+from codemaru.adapters.registry import JUDGES
 from codemaru.core.normalization import clamp, log_score, weighted_average
 from codemaru.models.snapshot import (
     GitHubSnapshot,
-    LeetCodeSnapshot,
+    JudgeView,
     PlatformStatus,
     SnapshotBundle,
-    SolvedAcSnapshot,
 )
 
-AnySnapshot = GitHubSnapshot | SolvedAcSnapshot | LeetCodeSnapshot
 
-
-def _status_scale(snapshot: AnySnapshot | None) -> float:
-    if snapshot is None:
-        return 0.0
-    if snapshot.status is PlatformStatus.OK:
+def _status_scale(status: PlatformStatus | None) -> float:
+    if status is PlatformStatus.OK:
         return 1.0
-    if snapshot.status is PlatformStatus.PARTIAL:
+    if status is PlatformStatus.PARTIAL:
         return 0.6
     return 0.0
 
 
 def _github_factor(gh: GitHubSnapshot | None) -> float:
-    scale = _status_scale(gh)
+    scale = _status_scale(gh.status if gh is not None else None)
     if scale == 0 or gh is None:
         return 0.0
     # Recent-activity evidence (commits/PRs/reviews/active days, past year).
@@ -57,19 +53,17 @@ def _github_factor(gh: GitHubSnapshot | None) -> float:
     return scale * (0.35 + 0.65 * signal)
 
 
-# Per-source trust: how much a judge's data is believed (LeetCode's endpoint is
-# unofficial; future scraped judges will be lower still).
-_TRUST_SOLVEDAC = 1.0
-_TRUST_LEETCODE = 0.75
-
 # A handful of solves carries no real signal, so it adds ~no confidence; the
 # curve only ramps up once a profile has a meaningful body of solved problems.
 _JUDGE_FREE = 10
 
+# GitHub is the identity platform and carries the largest single share. Judge
+# weights live in the registry (adapters/registry.py) alongside their trust and
+# saturation, so adding a judge is one row rather than an edit here.
+_GITHUB_WEIGHT = 0.6
 
-def _judge_factor(
-    snapshot: AnySnapshot | None, solved: int, *, trust: float, saturation: float
-) -> float:
+
+def _judge_factor(view: JudgeView, solved: int, *, trust: float, saturation: float) -> float:
     """Confidence from a judge scaled by *verifiable volume*, not mere presence.
 
     A near-empty account (e.g. a brand-new LeetCode handle with one solve)
@@ -77,7 +71,7 @@ def _judge_factor(
     history ramps the contribution up. Never negative, so adding a platform
     still can't lower confidence.
     """
-    scale = _status_scale(snapshot)
+    scale = _status_scale(view.status)
     if scale == 0.0:
         return 0.0
     volume = log_score(max(0, solved - _JUDGE_FREE), saturation) / 100
@@ -86,22 +80,19 @@ def _judge_factor(
 
 def compute_confidence(bundle: SnapshotBundle) -> float:
     """Return a 0-1 confidence weighted across the available platforms."""
-    gh = _github_factor(bundle.github)
+    total = _github_factor(bundle.github) * _GITHUB_WEIGHT
 
-    sa = 0.0
-    if bundle.solvedac is not None:
-        sa = _judge_factor(
-            bundle.solvedac, bundle.solvedac.solved_count, trust=_TRUST_SOLVEDAC, saturation=2200
+    # Additive, never renormalized: sharing a fixed budget between judges would
+    # LOWER an existing user's confidence the moment a new judge ships. Weights
+    # may therefore sum past 1.0 — the clamp below absorbs that, and only a
+    # profile maxed out on every axis reaches it.
+    for platform in JUDGES:
+        snapshot = bundle.judge_snapshot(platform.key)
+        if snapshot is None:
+            continue
+        view = snapshot.judge_view()
+        total += platform.weight * _judge_factor(
+            view, view.solved_count, trust=platform.trust, saturation=platform.saturation
         )
 
-    lc = 0.0
-    if bundle.leetcode is not None:
-        lc_solved = (
-            bundle.leetcode.solved.easy
-            + bundle.leetcode.solved.medium
-            + bundle.leetcode.solved.hard
-        )
-        lc = _judge_factor(bundle.leetcode, lc_solved, trust=_TRUST_LEETCODE, saturation=1400)
-
-    confidence = gh * 0.6 + sa * 0.25 + lc * 0.15
-    return clamp(round(confidence * 1000) / 1000, 0, 1)
+    return clamp(round(total * 1000) / 1000, 0, 1)

@@ -5,6 +5,174 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Opening a card URL directly no longer drops the tier nameplate.** The card
+  SVG's `default-src 'none'` CSP had no `img-src`, so the nameplate — an embedded
+  base64 PNG — was blocked whenever the SVG was loaded straight in a browser tab.
+  The policy now allows `img-src data:`, mirroring GitHub Camo's own SVG policy.
+- **A degraded card recovers in a minute instead of a day.** A stale-fallback
+  copy kept the full `CACHE_TTL_SECONDS` in the app cache (its restored
+  `overallStatus` is `ok`, so only the `stale` flag gives it away), and every
+  card — degraded or not — was sent `s-maxage=3600, stale-while-revalidate=86400`
+  at the CDN, so an outage stayed pinned at the edge long after the platform came
+  back. Stale and partial summaries now get the short negative TTL plus
+  `max-age=60` and `s-maxage=60, stale-while-revalidate=300`.
+- **A failed GitHub repository page no longer wipes out the whole profile.** A
+  timeout or network error on page 2+ discarded the already-fetched first page,
+  degrading GitHub to `unavailable` — a Seed card for an active account. The
+  failure now keeps page 1 (followers, contributions, top repos) and degrades to
+  `partial` with a note. Follow-up pages also get a tighter timeout — the lesser of
+  3s (`MAX_FOLLOWUP_PAGE_TIMEOUT`) and what is left of the build deadline, and none is
+  started with under a second to go — since their repos-only query is light.
+- **GitHub API failures are no longer cached as "user not found".** A non-200
+  first GraphQL page — an expired token (401), a rate limit (403) or a GitHub
+  outage (5xx) — was noted `user not found`, and that note carries the
+  10-minute `NOT_FOUND_CACHE_TTL_SECONDS`, so one outage pinned every handle
+  requested during it as a missing user. Such failures are now noted
+  `http <status>` and keep the 60s negative TTL; only a real "no such user"
+  (HTTP 200 with `data.user: null`) earns the long TTL.
+- **Generator: an animation toggle.** The API (`animate=false`), the CLI
+  (`--no-animate`) and the Action (`animate: false`) all supported it, but the
+  generator page had no control for it; it now has one, wired to the preview, the
+  URL and every snippet.
+- **The error card honours `compact`.** It always rendered at 640×300, so a
+  compact embed — which reserves 250×270 — blew out the README layout whenever
+  anything failed.
+- **`/api/card.svg` never returns a 500.** Any unexpected exception (an adapter
+  bug, the KV client, a renderer edge case) surfaced as a FastAPI 500, which is a
+  broken image in someone's README. It now returns the visible error card
+  (HTTP 200, `no-store`) and logs the traceback as a `card_error` event, so the
+  branch can't swallow real bugs silently.
+- **`/docs` and `/redoc` render again.** The generator page's `script-src 'self'`
+  CSP applied to them too, and Swagger UI / ReDoc load their bundles from
+  jsDelivr, so both pages came up blank. Those paths now get a docs-only policy
+  that allows jsDelivr, Google Fonts (ReDoc pulls its text fonts from there) and
+  inline scripts, which FastAPI's Swagger UI page needs to boot and offers no
+  nonce hook for. The generator page and the card endpoints keep the strict policy.
+- **Restored `sync-requirements.yml` and CI's Dependabot skip guard**, both
+  deleted by accident. Dependabot's `uv` PRs bump `pyproject.toml` / `uv.lock`
+  but can't regenerate the derived `requirements.txt`, so every one of them
+  failed the drift check.
+- **CHANGELOG compare links** — the older ones pointed at a single ref instead of
+  a range, and `[unreleased]` had no target at all.
+
+### Changed
+
+- **Card text is outlined from pre-instanced static fonts.** Instancing a
+  variable font costs ~200 ms per (family, weight) and a card needs five of them,
+  so a cold serverless start spent about a second inside fontTools before drawing
+  a single glyph. The instances are now built at development time and shipped in
+  the package (`codemaru/render/assets/fonts/<Family>-<weight>.ttf`, regenerated
+  with `uv run python scripts/instance_fonts.py`): a first render on a fresh
+  process drops from ~940 ms to ~25 ms. Saving a TTF rounds outline coordinates
+  to integers (`glyf` stores int16) — at most half a font unit, invisible at card
+  scale — and the shorter path data makes cards ~27% smaller. A weight nobody
+  pre-instanced still falls back to instancing at request time, so the variable
+  fonts stay shipped.
+- **The `<picture>` snippet follows the reader's GitHub theme.** It now pairs a
+  `(prefers-color-scheme: dark)` `<source>` (`theme=dark`) with the selected
+  theme on the `<img>` fallback. Picking `dark` in the generator makes the `<img>`
+  fall back to `default`, so the pair really is light/dark; `transparent` stays
+  as chosen, since it suits either scheme.
+- **Generator polish.** The handle inputs carry mobile keyboard attributes
+  (`inputmode`, autocapitalize / autocorrect / spellcheck off), the address bar is
+  kept in sync with the form via `history.replaceState` so a reload or a shared
+  link reproduces what's on screen, and the logo asset went from 265 KB to 22 KB.
+- **`InMemoryCache` is bounded** at 1024 entries. A serverless instance can be
+  reused for hours and the cache is keyed by profile, so an unbounded dict grew
+  with every distinct handle ever requested on it. Eviction drops everything
+  already expired first, then the oldest writes (FIFO, no per-read bookkeeping).
+- **`/api/health` reports the deploy facts needed to diagnose a bad
+  environment**: `version`, whether `kv` and `githubToken` are configured (never
+  their values), and `cacheEntries`. `?deep=true` adds a KV `PING` round-trip as
+  `kvPing` — opt-in, so a KV outage doesn't page anyone while cards render fine
+  without it.
+- **A GitHub handle that doesn't exist is cached for
+  `NOT_FOUND_CACHE_TTL_SECONDS`** (default 600) instead of 60s: it isn't a
+  transient failure, and re-asking the GraphQL API every minute only burns quota.
+- **Judge platforms are a registry.** One row per judge in
+  `codemaru/adapters/registry.py` carries its snapshot key, query param, label,
+  confidence trust / saturation / weight and whether it shares the httpx client;
+  scoring, confidence, the summary builder, the service, the query parser, the
+  snippets and the CLI iterate it instead of naming judges, so adding one is a
+  row plus an adapter. Tier bands shared by judges on the solved.ac scale moved
+  to `adapters/tiers.py`, and snapshots expose a common `JudgeView`. Confidence
+  weights stay additive and are never renormalized — sharing a fixed budget would
+  lower existing users' cards whenever a judge is added. The refactor changes no
+  score by itself; `SCORE_VERSION` moves to `0.4.0` with the JungOl entry below.
+- **A whole-card build budget (`CARD_BUILD_TIMEOUT_SECONDS`, default 6s).**
+  `ADAPTER_TIMEOUT_SECONDS` bounds one *request*, but GitHub paginates
+  sequentially, so the worst case ran well past a serverless function's limit —
+  and a function killed by the platform returns no error card and writes no
+  negative cache entry. The fetch phase now runs under one ceiling: the platforms
+  that finished are kept, the rest are cancelled and marked `unavailable` with a
+  "timed out (card build budget)" note (the card renders as `partial`), and
+  GitHub stops requesting repository pages cooperatively before the deadline
+  instead of losing the pages it already paid for. The budget covers the fetch
+  phase only, so it is sized against the KV calls bracketing it —
+  `KV_TIMEOUT_SECONDS + CARD_BUILD_TIMEOUT_SECONDS + 2 * KV_TIMEOUT_SECONDS`, 9s
+  at the defaults — which has to stay under the function timeout.
+- **Structured JSON logging on stdout** (`codemaru/telemetry.py`): one line per
+  `adapter`, `build`, `cache`, `kv_error` and `card_error` event, so "this card is
+  slow" becomes a query over `event` / `platform` / `ms` instead of a guess. Only
+  public handles are logged, and a caught exception contributes its class name
+  rather than its message, which can carry a credentialed KV URL. The one
+  deliberate exception is the card route's catch-all, which logs a full traceback
+  because nothing else would ever surface that bug. `configure_logging()`
+  always sets the `codemaru` logger to `INFO`, even on a host that already
+  configured root logging (uvicorn, pytest, Vercel's runtime) — only the
+  stdout handler is conditional on that.
+- **The GitHub Action installs with `uv`** (`astral-sh/setup-uv`) instead of
+  `pip`; the install step runs on every card refresh in every consumer's repo.
+- **Removed dead code**: `LIVE_ADAPTERS_AVAILABLE`, `LiveDataUnavailableError`,
+  the unused `REDIS_URL` setting, `render/fonts.py` and `DEFAULT_RENDER_OPTIONS`.
+
+### Added
+
+- **JungOl (정올) as a third judge.** Pass `jungol=<handle>` to `/api/card.svg` and
+  `/api/summary.json`, `--jungol` to the CLI, or `jungol:` to the Action; the
+  generator has a matching field. The adapter reads the `__data.json` that
+  JungOl's own SvelteKit pages already serve — two GETs, no login, no HTML
+  parsing and no new dependency — and decodes its devalue-flattened payload with
+  a small pure function tested against saved live payloads. Any failure (HTTP
+  error, timeout, schema drift, an oversized body) degrades to `unavailable`
+  like every other adapter.
+
+  JungOl uses the same 0–30 tier scale as solved.ac, so difficulty bands and tier
+  names carry over; its rating signal is scaled by 0.80 because its problem pool
+  is much smaller. The card shows **one** tier row, never two: `BOJ Tier` when
+  solved.ac has data, `JungOl Tier` otherwise. Solved counts fold into the
+  existing combined `Solved` metric.
+
+  Additive throughout — solved counts are summed, rating evidence is a max, and
+  the confidence weight (trust 0.60, saturation 900, weight 0.10) is added rather
+  than carved out of the other judges' — so linking JungOl can never lower an
+  existing card, and `snapshots.jungol` / `input.jungol` are new keys on a wire
+  format that is otherwise unchanged. `SCORE_VERSION` moves to `0.4.0`, which
+  expires every cache entry once (the new handle segment in the cache key does
+  that anyway).
+
+- **Documented why Programmers, CodeTree and SWEA are not collected**
+  (`docs/SCORING.md`): none exposes a public profile or API without logging in,
+  and codemaru will not ask anyone for platform credentials.
+
+- **Two new workflows.** `major-tag.yml` force-moves the floating `v1` tag onto
+  every published release, so `uses: bnbong/codemaru@v1` — what the README and
+  the generator tell people to write — actually resolves; only plain `vX.Y.Z`
+  releases move it, and the initial `v1` has to be created once by hand (see
+  CONTRIBUTING). `action-smoke.yml` runs the composite action straight from the
+  checkout on every PR that touches it, so a broken `action.yml` surfaces here
+  instead of in a consumer's repo after a release.
+- **Golden-digest render tests.** A render is byte-deterministic, so a SHA-256
+  per demo variant pins layout, palette, animation CSS and font loading; after an
+  intentional visual change, eyeball the SVG and refresh the digests with
+  `uv run python -m tests.render.golden --update`. The suite also fails when the
+  shipped static font instances drift from a fresh build
+  (`scripts/instance_fonts.py --check`).
+
 ## [1.2.1] - 2026-06-12
 
 ### Changed
@@ -204,9 +372,10 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
+[unreleased]: https://github.com/bnbong/codemaru/compare/v1.2.1...HEAD
 [1.2.1]: https://github.com/bnbong/codemaru/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/bnbong/codemaru/compare/v1.2.0
-[1.1.1]: https://github.com/bnbong/codemaru/compare/v1.1.1
-[1.1.0]: https://github.com/bnbong/codemaru/compare/v1.1.0
-[1.0.1]: https://github.com/bnbong/codemaru/compare/v1.0.1
+[1.2.0]: https://github.com/bnbong/codemaru/compare/v1.1.1...v1.2.0
+[1.1.1]: https://github.com/bnbong/codemaru/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/bnbong/codemaru/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/bnbong/codemaru/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bnbong/codemaru/releases/tag/v1.0.0

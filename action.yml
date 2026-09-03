@@ -17,6 +17,10 @@ inputs:
     description: "LeetCode handle (optional)."
     required: false
     default: ""
+  jungol:
+    description: "JungOl / 정올 handle (optional)."
+    required: false
+    default: ""
   theme:
     description: "Card theme: default | dark | transparent."
     required: false
@@ -50,9 +54,21 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
+    - name: Set up uv
+      # uv resolves and installs an order of magnitude faster than pip, and this
+      # step runs on every card refresh in every consumer's repo. setup-python
+      # above still provides the interpreter uv installs into (--system).
+      uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      with:
+        # No cache: this runs inside the consumer's repo, and setup-uv's auto
+        # cache would key off *their* workspace lockfiles (codemaru's own live
+        # under github.action_path), so it would write a mis-keyed entry into
+        # their Actions cache quota for no gain.
+        enable-cache: false
+
     - name: Install codemaru
       shell: bash
-      run: pip install --quiet "${{ github.action_path }}"
+      run: uv pip install --system --quiet "${{ github.action_path }}"
 
     - name: Generate card
       shell: bash
@@ -64,6 +80,7 @@ runs:
         IN_GITHUB: ${{ inputs.github }}
         IN_BOJ: ${{ inputs.boj }}
         IN_LEETCODE: ${{ inputs.leetcode }}
+        IN_JUNGOL: ${{ inputs.jungol }}
         IN_THEME: ${{ inputs.theme }}
         IN_COMPACT: ${{ inputs.compact }}
         IN_ANIMATE: ${{ inputs.animate }}
@@ -72,6 +89,7 @@ runs:
         args=(--github "$IN_GITHUB" --theme "$IN_THEME" --out "$IN_OUT")
         [ -n "$IN_BOJ" ] && args+=(--boj "$IN_BOJ")
         [ -n "$IN_LEETCODE" ] && args+=(--leetcode "$IN_LEETCODE")
+        [ -n "$IN_JUNGOL" ] && args+=(--jungol "$IN_JUNGOL")
         [ "$IN_COMPACT" = "true" ] && args+=(--compact)
         [ "$IN_ANIMATE" = "false" ] && args+=(--no-animate)
         codemaru generate "${args[@]}"
