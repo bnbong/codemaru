@@ -93,8 +93,8 @@ def test_docs_page_actually_renders_swagger_ui(client: TestClient):
     assert "SwaggerUIBundle" in res.text
     assert "<script>" in res.text  # the inline bootstrap 'unsafe-inline' is for
     csp = res.headers["content-security-policy"]
-    assert "'unsafe-inline'" in _sources(csp, "script-src")
-    assert "https://cdn.jsdelivr.net" in _sources(csp, "script-src")
+    directives = _directives(csp)
+    assert directives["script-src"] == "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
 
 
 def test_generator_page_csp_is_not_widened_by_the_docs_policy(client: TestClient):
