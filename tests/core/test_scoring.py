@@ -210,11 +210,11 @@ def test_leetcode_discounted_vs_solvedac():
 
 def test_tier_boundaries():
     assert compute_tier(0, 1) is Tier.SEED
-    assert compute_tier(15, 1) is Tier.BRONZE
-    assert compute_tier(14.9, 1) is Tier.SEED
-    assert compute_tier(45, 1) is Tier.GOLD
-    assert compute_tier(57.9, 1) is Tier.GOLD
-    assert compute_tier(58, 1) is Tier.PLATINUM
+    assert compute_tier(12, 1) is Tier.BRONZE
+    assert compute_tier(11.9, 1) is Tier.SEED
+    assert compute_tier(40, 1) is Tier.GOLD
+    assert compute_tier(52.9, 1) is Tier.GOLD
+    assert compute_tier(53, 1) is Tier.PLATINUM
     assert compute_tier(95, 1) is Tier.MARU
 
 

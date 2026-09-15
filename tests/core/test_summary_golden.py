@@ -37,7 +37,7 @@ from codemaru.settings import get_settings
 UPDATE_COMMAND = "uv run python -m tests.core.test_summary_golden --update"
 
 # --- begin golden digest ---
-GOLDEN_DIGEST = "cf755968db672426df6e1336551078c642f387b2c43a129e9c0f64af5699b411"
+GOLDEN_DIGEST = "985dfbb82226c21d19c65a05584e3ffc0c7584b0526a410d40c0a1c57ffc9b56"
 # --- end golden digest ---
 
 
@@ -73,7 +73,7 @@ def test_score_version_is_pinned():
     # change, and bumping the version is what stops a shared cache from serving
     # summaries scored by the previous engine (SCORE_VERSION is a cache-key
     # segment). Changing a formula without changing this line has to fail here.
-    assert SCORE_VERSION == "0.4.0"
+    assert SCORE_VERSION == "0.5.0"
 
 
 def test_cache_key_format_for_a_full_profile(monkeypatch: pytest.MonkeyPatch):
@@ -87,7 +87,7 @@ def test_cache_key_format_for_a_full_profile(monkeypatch: pytest.MonkeyPatch):
     get_settings.cache_clear()
 
     assert service._cache_key(DEMO_INPUT) == (
-        "summary:v0.4.0:local:fixture:codemaru-demo|codemaru_demo|codemaru_demo|codemaru_demo"
+        "summary:v0.5.0:local:fixture:codemaru-demo|codemaru_demo|codemaru_demo|codemaru_demo"
     )
 
 

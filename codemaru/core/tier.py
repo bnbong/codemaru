@@ -7,13 +7,13 @@ from codemaru.models.score import TIERS, Tier
 
 # Lower bound (inclusive) of the overall score for each tier, highest first.
 _SCORE_THRESHOLDS: list[tuple[Tier, float]] = [
-    (Tier.MARU, 90),
-    (Tier.MASTER, 80),
-    (Tier.DIAMOND, 70),
-    (Tier.PLATINUM, 58),
-    (Tier.GOLD, 45),
-    (Tier.SILVER, 30),
-    (Tier.BRONZE, 15),
+    (Tier.MARU, 87),
+    (Tier.MASTER, 76),
+    (Tier.DIAMOND, 65),
+    (Tier.PLATINUM, 53),
+    (Tier.GOLD, 40),
+    (Tier.SILVER, 26),
+    (Tier.BRONZE, 12),
     (Tier.SEED, 0),
 ]
 

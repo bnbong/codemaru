@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-09-15
+
+### Changed
+
+- **Tier thresholds are more generous.** The overall-score lower bound of every
+  tier drops by a few points — Maru 90 → 87, Master 80 → 76, Diamond 70 → 65,
+  Platinum 58 → 53, Gold 45 → 40, Silver 30 → 26, Bronze 15 → 12 (Seed stays 0).
+  The axis scores, the overall number and the confidence caps are untouched, so
+  the radar and the printed score do not move; only the band a given score
+  lands in does. The worked example in `docs/SCORING.md` (overall 53.0) moves
+  from Gold to Platinum. `SCORE_VERSION` is bumped 0.4.0 → 0.5.0, so every
+  cached summary is rebuilt on first request.
+
 ## [1.3.0] - 2026-09-03
 
 ### Fixed
@@ -377,6 +390,7 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
+[1.4.0]: https://github.com/bnbong/codemaru/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/bnbong/codemaru/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/bnbong/codemaru/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bnbong/codemaru/compare/v1.1.1...v1.2.0

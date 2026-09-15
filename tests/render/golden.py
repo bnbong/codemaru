@@ -30,9 +30,9 @@ UPDATE_COMMAND = "uv run python -m tests.render.golden --update"
 
 GOLDEN = {
     # --- begin golden digests ---
-    "default": "d854c5a8b225afb89ae9af0bcfd988a88f8e6d4aef3bf21d9e1fe5fa6dffb9af",
-    "dark": "4dbffcb6210a26154b3f1ee354e263961d520bdc1dd56c37238b5b53d58149d0",
-    "transparent": "e3a68a80087e1acf0a2998b75acb2e6e8eeb47b224826ce697f7fc8385e752d0",
+    "default": "778193e07242ed92c5039971a0847712847f56552fe60ef69673d1bbf167ac01",
+    "dark": "e0d1f19ccbc48dd4f562f94501da0ac5aab72e26c19996271970b127b4d2bfed",
+    "transparent": "f3e2bc87f5f83f40fe369e13f5e90d48730915d6350351ac28151d66ec3456e2",
     "compact": "d2d67456dadd43bc0dbe54b42545d8d2f374a5b1916afb36def14f34ea6bf696",
     "error": "eb77e88a6eb46326c6b527a584e26644ce0f624d39e767522bc173c7a8b487ca",
     # --- end golden digests ---

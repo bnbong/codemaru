@@ -18,7 +18,7 @@ from codemaru.core.tier import compute_tier
 from codemaru.models.score import Axis, AxisScores, NormalizedScores
 from codemaru.models.snapshot import GitHubSnapshot, JudgeView, SnapshotBundle
 
-SCORE_VERSION = "0.4.0"
+SCORE_VERSION = "0.5.0"
 
 # Overall-score axis weights (mirrors the documented formula).
 AXIS_WEIGHTS: dict[Axis, float] = {

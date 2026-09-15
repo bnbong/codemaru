@@ -4,7 +4,7 @@
 
 This is a from-scratch walkthrough of the scoring pipeline, using a real profile (`bnbong`) as the example. 
 
-Numbers are a point-in-time snapshot (`scoreVersion` 0.4.0) and change with live data.
+Numbers are a point-in-time snapshot (`scoreVersion` 0.5.0) and change with live data.
 
 > Scores summarize **public activity**, not an absolute skill rating.
 
@@ -174,9 +174,9 @@ A confidence of **0.763** opens the cap up to **Master**.
 
 ### Final tier
 
-$$\text{tier}=\min(\underbrace{\text{Gold}}_{\text{score }53.0\in[45,58)}, \underbrace{\text{Master}}_{\text{confidence cap}})=\textbf{Gold}$$
+$$\text{tier}=\min(\underbrace{\text{Platinum}}_{\text{score }53.0\in[53,65)}, \underbrace{\text{Master}}_{\text{confidence cap}})=\textbf{Platinum}$$
 
-The overall score (53.0) lands in the Gold band, and the confidence cap (Master) is higher, so it doesn't pull the tier down. **bnbong → Gold.**
+The overall score (53.0) lands in the Platinum band, and the confidence cap (Master) is higher, so it doesn't pull the tier down. **bnbong → Platinum.**
 
 ## Confidence, caps, and Maru
 
@@ -234,7 +234,7 @@ public.
 
 실제 프로필(`bnbong`)을 예시로 점수 산정 파이프라인을 처음부터 따라갑니다. 
 
-수치는 특정 시점 스냅샷(`scoreVersion` 0.4.0)이며 실시간 데이터에 따라 바뀝니다.
+수치는 특정 시점 스냅샷(`scoreVersion` 0.5.0)이며 실시간 데이터에 따라 바뀝니다.
 
 > 점수는 **공개 활동**을 요약한 것이지 절대적인 실력 평가가 아닙니다.
 
@@ -402,9 +402,9 @@ confidence **0.763**은 상한을 **Master**까지 엽니다.
 
 ### 최종 티어
 
-$$\text{tier}=\min(\underbrace{\text{Gold}}_{\text{점수 }53.0\in[45,58)}, \underbrace{\text{Master}}_{\text{confidence 상한}})=\textbf{Gold}$$
+$$\text{tier}=\min(\underbrace{\text{Platinum}}_{\text{점수 }53.0\in[53,65)}, \underbrace{\text{Master}}_{\text{confidence 상한}})=\textbf{Platinum}$$
 
-overall 점수(53.0)가 Gold 구간에 들고, confidence 상한(Master)이 더 높아 티어를 끌어내리지 않습니다. **bnbong → Gold.**
+overall 점수(53.0)가 Platinum 구간에 들고, confidence 상한(Master)이 더 높아 티어를 끌어내리지 않습니다. **bnbong → Platinum.**
 
 ## Confidence, 상한, Maru
 
