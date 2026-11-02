@@ -4,6 +4,17 @@ This is where input → (cache | adapters) → scoring → summary is coordinate
 routes stay thin. Fixture mode serves deterministic sample data; live mode
 fetches the platforms concurrently. Both go through the same cache boundary.
 
+Two entry points share that boundary:
+
+* ``get_summary`` — always answers with a summary built (or cached) right now.
+  The CLI and anything that wants a fresh read use it.
+* ``get_summary_stale_first`` — the web routes' path. On a response-cache miss
+  it answers immediately with the last-good summary (marked stale) and hands
+  the live rebuild back to the caller to run *after* the response is sent. A
+  live build can take several seconds, and GitHub's image proxy (Camo) gives up
+  at roughly 4s, so a synchronous rebuild showed a broken image on the first
+  view of an expired card.
+
 The cache is keyed by profile only (not theme/compact): those affect rendering,
 not the underlying data, and rendering is cheap.
 """
@@ -12,8 +23,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import Callable, Coroutine, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import Enum
 from time import monotonic
 from typing import Any
 
@@ -41,7 +54,7 @@ from codemaru.models.snapshot import (
 )
 from codemaru.models.summary import CodemaruSummary
 from codemaru.settings import Settings, get_settings
-from codemaru.telemetry import elapsed_ms, log_event
+from codemaru.telemetry import elapsed_ms, log_event, log_exception
 
 # A judge adapter: called with the handle plus keyword arguments that vary by
 # platform (the shared client, or a timeout for adapters with their own session).
@@ -77,6 +90,25 @@ _stale = InMemoryCache()
 # Redis key prefix for the stale-fallback store (the response cache uses the bare
 # profile key). Keeps the two namespaces distinct within one shared KV database.
 _STALE_PREFIX = "stale:"
+
+# Cache keys whose background refresh this instance has already launched, mapped
+# to when it was claimed (monotonic seconds). A burst of Camo hits for one
+# expired card all miss the cache within the same second or two; without this
+# each would start its own multi-second live build against the same platforms.
+#
+# Deliberately per-instance only. Across instances the refresh writes the served
+# stale copy back to the response cache as its first step, so other instances
+# get a (short-TTL) cache hit instead of a miss and don't start a refresh of
+# their own. A dedicated KV lock would close the remaining sub-second window,
+# but costs a KV round trip on every miss for a duplicate build that is
+# harmless (both builds write the same fresh result).
+_refreshing: dict[str, float] = {}
+
+# Extra seconds a refresh claim is honoured beyond the refresh's own worst case
+# (see _refresh_claim_seconds). After that the claim is treated as abandoned —
+# e.g. a route rendered an error card and dropped the background work, or the
+# instance was frozen mid-refresh — so the next miss can try again.
+_REFRESH_CLAIM_MARGIN = 5.0
 
 
 async def _kv_get(memory: InMemoryCache, key: str) -> str | None:
@@ -115,12 +147,46 @@ async def _kv_set(memory: InMemoryCache, key: str, value: str, ttl_seconds: floa
         log_event("kv_error", op="set", error=type(exc).__name__)
 
 
+async def _kv_set_nx(memory: InMemoryCache, key: str, value: str, ttl_seconds: float) -> bool:
+    """Write only when the key holds nothing (Redis ``SET ... NX``); return
+    whether this call wrote.
+
+    The mirror follows what we believe KV holds, as in ``_kv_set``: on a KV
+    write it is overwritten with our value; on an NX miss (Upstash answers
+    ``null``) KV holds someone else's newer entry, whose value we don't know, so
+    the mirror is left as is. Without KV, or when the KV write fails, the mirror
+    is the only store we can reason about, so it gets the same only-if-absent
+    rule locally.
+    """
+    creds = kv.credentials()
+    if creds is not None:
+        try:
+            result = await kv.command(
+                *creds, "SET", key, value, "EX", str(max(1, int(ttl_seconds))), "NX"
+            )
+        except Exception as exc:  # noqa: BLE001 - fall through to the local-only rule
+            log_event("kv_error", op="set_nx", error=type(exc).__name__)
+        else:
+            if result is None:
+                return False
+            memory.set(key, value, ttl_seconds)
+            return True
+    if memory.get(key) is not None:
+        return False
+    memory.set(key, value, ttl_seconds)
+    return True
+
+
 async def _cache_read(key: str) -> str | None:
     return await _kv_get(_cache, key)
 
 
 async def _cache_write(key: str, value: str, ttl_seconds: float) -> None:
     await _kv_set(_cache, key, value, ttl_seconds)
+
+
+async def _cache_write_if_absent(key: str, value: str, ttl_seconds: float) -> bool:
+    return await _kv_set_nx(_cache, key, value, ttl_seconds)
 
 
 async def _stale_read(key: str) -> str | None:
@@ -173,54 +239,257 @@ def _load_summary(raw: str) -> CodemaruSummary | None:
         return None
 
 
+class _Unread(Enum):
+    """Sentinel type: the last-good store has not been consulted yet."""
+
+    TOKEN = 0
+
+
+_UNREAD = _Unread.TOKEN
+
+# A refresh handed back to the route: run it once, after the response is sent.
+Refresh = Callable[[], Awaitable[None]]
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryResult:
+    """What ``get_summary_stale_first`` answers with.
+
+    ``refresh`` is set only when ``summary`` is a stale last-good copy served in
+    place of a live build. The caller must schedule it to run after the
+    response body is sent (the routes use the response's ``BackgroundTask``);
+    it never raises, and dropping it is safe (the claim it holds expires).
+    """
+
+    summary: CodemaruSummary
+    refresh: Refresh | None = None
+
+
+async def _read_cached(key: str, profile: ProfileInput) -> tuple[CodemaruSummary | None, str]:
+    """Look the profile up in the response cache.
+
+    Returns the cached summary (or None) and the miss kind for the cache log
+    line: "rebuild" distinguishes a cached entry we had to throw away (schema
+    drift from another deploy) from a plain "miss" — a spike in one is a bug,
+    the other is just cold traffic.
+    """
+    cached = await _cache_read(key)
+    if cached is None:
+        return None, "miss"
+    restored = _load_summary(cached)
+    if restored is None:
+        # Incompatible/corrupt entry — the rebuild that follows overwrites it.
+        return None, "rebuild"
+    log_event("cache", result="hit", handle=profile.github, stale=restored.stale)
+    return restored, "hit"
+
+
 async def get_summary(profile: ProfileInput) -> CodemaruSummary:
-    """Return the summary for a profile, using the cache when warm."""
+    """Return the summary for a profile, using the cache when warm.
+
+    A miss is always rebuilt before returning (see the module docstring for the
+    stale-first variant the web routes use).
+    """
     settings = get_settings()
     key = _cache_key(profile)
-    cached = await _cache_read(key)
-    # "rebuild" distinguishes a cached entry we had to throw away (schema drift
-    # from another deploy) from a plain "miss" — a spike in one is a bug, the
-    # other is just cold traffic.
-    result = "miss"
+    cached, result = await _read_cached(key, profile)
     if cached is not None:
-        restored = _load_summary(cached)
-        if restored is not None:
-            log_event("cache", result="hit", handle=profile.github, stale=restored.stale)
-            return restored
-        # Incompatible/corrupt entry — fall through to rebuild, which overwrites it.
-        result = "rebuild"
+        return cached
+    return await _build_and_store(key, profile, settings, result=result)
 
+
+async def get_summary_stale_first(profile: ProfileInput) -> SummaryResult:
+    """Return a summary without waiting on a live build when a last-good copy exists.
+
+    Live mode, response-cache miss: read the last-good store (one more KV read,
+    bounded by ``kv_timeout_seconds``). If it holds a summary, answer with it
+    right away — marked ``stale`` so the footer and JSON say so, and so it only
+    earns the short negative TTL at both caches — and hand the live rebuild back
+    as ``SummaryResult.refresh``. The rebuild then writes the response cache and
+    the last-good store exactly as the synchronous path does.
+
+    Without a last-good entry (the first request ever for this profile, or it
+    aged out of ``stale_ttl_seconds``) there is nothing to serve, so the build
+    runs synchronously as before. Fixture mode never goes stale-first: its
+    build is instant and deterministic.
+
+    Hot path cost before responding: the cache read plus, on a miss, the stale
+    read. Nothing is written until the refresh runs.
+    """
+    settings = get_settings()
+    key = _cache_key(profile)
+    cached, result = await _read_cached(key, profile)
+    if cached is not None:
+        return SummaryResult(cached)
+    if settings.fixture_mode:
+        return SummaryResult(await _build_and_store(key, profile, settings, result=result))
+
+    last_good = await _read_last_good(key)
+    if last_good is None:
+        # Pass the read along so a degraded build doesn't repeat it.
+        summary = await _build_and_store(key, profile, settings, result=result, last_good=None)
+        return SummaryResult(summary)
+
+    served = last_good.model_copy(update={"stale": True})
+    refresh = _claim_refresh(key, profile, settings, last_good)
+    log_event(
+        "cache",
+        result="stale_first",
+        handle=profile.github,
+        stale=True,
+        refreshing=refresh is not None,
+    )
+    return SummaryResult(served, refresh)
+
+
+def _refresh_claim_seconds(settings: Settings) -> float:
+    """How long a refresh claim blocks another one on this instance.
+
+    The refresh's own worst case is one KV write (the stale copy), the build
+    budget, a stale read, then the final writes — so a claim older than that
+    plus a margin belongs to a refresh that will never release it.
+    """
+    return (
+        settings.card_build_timeout_seconds
+        + 3 * settings.kv_timeout_seconds
+        + _REFRESH_CLAIM_MARGIN
+    )
+
+
+def _claim_refresh(
+    key: str, profile: ProfileInput, settings: Settings, last_good: CodemaruSummary
+) -> Refresh | None:
+    """Claim the background refresh for ``key`` on this instance.
+
+    Returns the refresh coroutine function, or None when another request on
+    this instance already holds a live claim. The claim is taken *here*, in the
+    request path, not when the refresh starts: concurrent requests are all
+    served before any BackgroundTask begins, so a claim taken inside the task
+    would let every one of them through.
+    """
+    now = monotonic()
+    claimed_at = _refreshing.get(key)
+    if claimed_at is not None and now - claimed_at < _refresh_claim_seconds(settings):
+        return None
+    _refreshing[key] = now
+
+    async def refresh() -> None:
+        await _refresh(key, profile, settings, last_good, claimed_at=now)
+
+    return refresh
+
+
+async def _refresh(
+    key: str,
+    profile: ProfileInput,
+    settings: Settings,
+    last_good: CodemaruSummary,
+    *,
+    claimed_at: float,
+) -> None:
+    """Rebuild a profile in the background after a stale copy was served.
+
+    Never raises: it runs after the response is sent, where an exception has no
+    one to report to (Starlette would only log it, and a second background task
+    queued behind it would be skipped). Failures are logged and the stale copy
+    simply stays until the next miss retries.
+    """
+    started = monotonic()
+    try:
+        # Write the served stale copy to the response cache first (stale ->
+        # short negative TTL). This is the cross-instance dedupe: until the
+        # fresh result lands, other instances get a cache hit on it instead of
+        # a miss that would start another refresh. The write is only-if-absent
+        # (SET NX): if another instance's rebuild already landed a fresh entry
+        # for this key, this late stale copy must not replace it. Our own fresh
+        # result still wins — the build's write after this one is
+        # unconditional. It goes to the response cache only: a stale-marked
+        # copy must never reach the last-good store.
+        stale_copy = last_good.model_copy(update={"stale": True})
+        await _cache_write_if_absent(
+            key, stale_copy.model_dump_json(), _cache_ttl(stale_copy, settings)
+        )
+        summary = await _build_and_store(
+            key, profile, settings, result="refresh", last_good=last_good
+        )
+        log_event(
+            "refresh",
+            handle=profile.github,
+            ms=elapsed_ms(started),
+            stale=summary.stale,
+        )
+    except Exception:  # noqa: BLE001 - background work must never raise
+        log_exception("refresh_error", handle=profile.github)
+    finally:
+        # Release only our own claim: if it expired and another request
+        # re-claimed the key meanwhile, that newer refresh still owns it.
+        if _refreshing.get(key) == claimed_at:
+            del _refreshing[key]
+
+
+async def _build_and_store(
+    key: str,
+    profile: ProfileInput,
+    settings: Settings,
+    *,
+    result: str,
+    last_good: CodemaruSummary | None | _Unread = _UNREAD,
+) -> CodemaruSummary:
+    """Build a summary now (fixture or live), cache it, and log the outcome.
+
+    ``last_good`` is the already-read last-good summary when the caller has
+    consulted the stale store; left unread, a degraded live build reads it
+    itself.
+    """
     if settings.fixture_mode:
         summary = _build_fixture(profile)
+        ttl = await _store(key, summary, settings)
     else:
         summary = await _build_live(profile, settings)
-        summary = await _apply_stale_fallback(key, summary, settings)
-
-    ttl = await _store(key, summary, settings)
+        summary, ttl = await _finalize_live(key, summary, settings, last_good)
     log_event("cache", result=result, handle=profile.github, stale=summary.stale, ttl=ttl)
     return summary
 
 
-async def _apply_stale_fallback(
-    key: str, summary: CodemaruSummary, settings: Settings
-) -> CodemaruSummary:
-    """On a fully-successful build, refresh the last-good store; on a degraded
-    build, fall back to the last good summary if one is still retained.
+async def _read_last_good(key: str) -> CodemaruSummary | None:
+    raw = await _stale_read(key)
+    return _load_summary(raw) if raw is not None else None
 
-    This keeps a user's card intact through a transient platform outage instead
-    of showing a suddenly-degraded score for the cache lifetime.
+
+async def _finalize_live(
+    key: str,
+    summary: CodemaruSummary,
+    settings: Settings,
+    last_good: CodemaruSummary | None | _Unread,
+) -> tuple[CodemaruSummary, int]:
+    """Apply stale fallback to a fresh live build and cache the outcome.
+
+    On a fully-successful build, refresh the last-good store; on a degraded
+    build, fall back to the last good summary if one is still retained. This
+    keeps a user's card intact through a transient platform outage instead of
+    showing a suddenly-degraded score for the cache lifetime.
+
+    Returns the summary to serve and the response-cache TTL chosen for it. On
+    the success path the two writes run concurrently, so the post-build KV cost
+    is one ``kv_timeout_seconds`` either way (see the budget in settings.py).
     """
-    if summary.overall_status is PlatformStatus.OK:
-        await _stale_write(key, summary.model_dump_json(), settings.stale_ttl_seconds)
-        return summary
-    last_good = await _stale_read(key)
+    # `not summary.stale` is defensive: a fresh build is never stale, and a
+    # stale copy written here would keep re-serving itself as "last good".
+    if summary.overall_status is PlatformStatus.OK and not summary.stale:
+        ttl = _cache_ttl(summary, settings)
+        payload = summary.model_dump_json()
+        await asyncio.gather(
+            _stale_write(key, payload, settings.stale_ttl_seconds),
+            _cache_write(key, payload, ttl),
+        )
+        return summary, ttl
+    if isinstance(last_good, _Unread):
+        last_good = await _read_last_good(key)
     if last_good is not None:
-        restored = _load_summary(last_good)
-        if restored is not None:
-            # Serve the last good summary, but mark it stale so JSON consumers and
-            # the card footer can tell it isn't a fresh read.
-            return restored.model_copy(update={"stale": True})
-    return summary
+        # Serve the last good summary, but mark it stale so JSON consumers and
+        # the card footer can tell it isn't a fresh read.
+        summary = last_good.model_copy(update={"stale": True})
+    return summary, await _store(key, summary, settings)
 
 
 async def _store(key: str, summary: CodemaruSummary, settings: Settings) -> int:
@@ -411,6 +680,7 @@ def _platform_statuses(bundle: SnapshotBundle) -> dict[str, PlatformStatus]:
 
 
 def clear_cache() -> None:
-    """Drop all cached and last-successful summaries (used in tests)."""
+    """Drop all cached and last-successful summaries and refresh claims (tests)."""
     _cache.clear()
     _stale.clear()
+    _refreshing.clear()

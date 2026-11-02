@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from starlette.background import BackgroundTask
+from starlette.background import BackgroundTasks
 
 from codemaru import __version__, kv
 from codemaru.analytics import is_camo, record_embed, usage_count
@@ -22,7 +22,7 @@ from codemaru.models.snapshot import PlatformStatus
 from codemaru.models.summary import CodemaruSummary
 from codemaru.render import render_card, render_error_card
 from codemaru.render.themes import TIER_COLORS
-from codemaru.service import cache_size, effective_mode, get_summary
+from codemaru.service import Refresh, cache_size, effective_mode, get_summary_stale_first
 from codemaru.settings import get_settings
 from codemaru.telemetry import log_exception
 from codemaru.web.query import QueryError, parse_request
@@ -75,6 +75,43 @@ def _cache_headers(body: bytes, summary: CodemaruSummary) -> dict[str, str]:
     }
 
 
+def _background(
+    refresh: Refresh | None, *, embed_handle: str | None = None
+) -> BackgroundTasks | None:
+    """Work to run after the response body is sent, or None when there is none.
+
+    Why the response's background and not ``asyncio.create_task``: on Vercel the
+    Python runtime (``vercel_runtime``, ``@vercel/python``) serves the ASGI app
+    through uvicorn, which writes the body to the platform as soon as the app
+    sends it — the client is not kept waiting for Starlette's background tasks,
+    which run afterwards inside the same ASGI call. The runtime only reports
+    the invocation finished ("end" IPC message, after draining ``wait_until``)
+    once that ASGI call returns, so the instance stays alive until the
+    background work completes. A detached ``create_task`` would outlive the
+    invocation instead and could be frozen or killed mid-refresh.
+
+    Assumption / failure mode: this holds for the IPC-mode runtime (Fluid
+    compute, the default for current projects). On the legacy Lambda handler
+    path the runtime returns as soon as the Content-Length body is read, so the
+    response is still not delayed, but the instance may be frozen before the
+    refresh finishes; the refresh then resumes on the next thaw or is lost, and
+    the stale copy is served until a later miss refreshes it (bounded by
+    ``stale_ttl_seconds``, after which the build runs synchronously again).
+    The refresh also counts toward the function's ``maxDuration``: if the
+    platform kills it there, the response was already delivered and only the
+    refresh is lost.
+
+    Embed tracking runs first: it is a single short KV call, so a refresh cut
+    off by ``maxDuration`` can't take the adoption count down with it.
+    """
+    tasks = BackgroundTasks()
+    if embed_handle is not None:
+        tasks.add_task(record_embed, embed_handle)
+    if refresh is not None:
+        tasks.add_task(refresh)
+    return tasks if tasks.tasks else None
+
+
 def _base_url(request: Request) -> str:
     settings = get_settings()
     if settings.public_base_url:
@@ -82,7 +119,12 @@ def _base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
-def _error_card(message: str, theme: str | None, compact: str | None = None) -> Response:
+def _error_card(
+    message: str,
+    theme: str | None,
+    compact: str | None = None,
+    background: BackgroundTasks | None = None,
+) -> Response:
     """Render an SVG error card with HTTP 200.
 
     GitHub's image proxy (Camo) and many CDNs won't display a non-2xx image, so
@@ -101,6 +143,7 @@ def _error_card(message: str, theme: str | None, compact: str | None = None) -> 
         status_code=200,
         media_type=_SVG_MEDIA,
         headers={"X-Codemaru-Error": "true", "Cache-Control": "no-store"},
+        background=background,
     )
 
 
@@ -168,8 +211,15 @@ async def card_svg(
     except QueryError as exc:
         return _error_card(str(exc), theme, compact)
 
+    refresh: Refresh | None = None
     try:
-        summary = await get_summary(profile)
+        # On a cache miss with a last-good copy, this answers with that copy at
+        # once (stale) and hands back the live rebuild to run after the body is
+        # sent. A synchronous rebuild can take several seconds, and Camo gives
+        # up at ~4s, so the first view of an expired card was a broken image.
+        result = await get_summary_stale_first(profile)
+        refresh = result.refresh
+        summary = result.summary
         svg = render_card(summary, options)
     except Exception:  # noqa: BLE001 - see below; a card must never 500
         # Anything unexpected here (an adapter bug, the KV client, a renderer
@@ -181,7 +231,9 @@ async def card_svg(
         # The card hides the reason from the viewer, so log it with a traceback:
         # otherwise this branch swallows real bugs silently.
         log_exception("card_error", handle=profile.github)
-        return _error_card("temporarily unavailable", theme, compact)
+        # A refresh claimed before a render failure still runs, so the next
+        # request gets a freshly built summary instead of the same stale copy.
+        return _error_card("temporarily unavailable", theme, compact, _background(refresh))
 
     body = svg.encode("utf-8")
     # A fetch from GitHub's image proxy (Camo) means the card is really rendered
@@ -196,16 +248,19 @@ async def card_svg(
         # `unavailable`) would otherwise let anyone inflate the badge and grow
         # the KV set without bound. In fixture mode the snapshot is always usable.
         gh = summary.snapshots.github
-        background = (
-            BackgroundTask(record_embed, profile.github) if gh is not None and gh.usable else None
-        )
+        embed_handle = profile.github if gh is not None and gh.usable else None
         return Response(
             body,
             media_type=_SVG_MEDIA,
             headers=_cache_headers(body, summary),
-            background=background,
+            background=_background(refresh, embed_handle=embed_handle),
         )
-    return Response(body, media_type=_SVG_MEDIA, headers={"Cache-Control": "no-store"})
+    return Response(
+        body,
+        media_type=_SVG_MEDIA,
+        headers={"Cache-Control": "no-store"},
+        background=_background(refresh),
+    )
 
 
 @router.get("/api/summary.json")
@@ -221,12 +276,18 @@ async def summary_json(
         profile, _options = parse_request(
             github, boj, leetcode, jungol, theme=theme, compact=compact
         )
-        summary = await get_summary(profile)
+        result = await get_summary_stale_first(profile)
     except QueryError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
 
+    summary = result.summary
     body = summary.model_dump_json(by_alias=True).encode("utf-8")
-    return Response(body, media_type=_JSON_MEDIA, headers=_cache_headers(body, summary))
+    return Response(
+        body,
+        media_type=_JSON_MEDIA,
+        headers=_cache_headers(body, summary),
+        background=_background(result.refresh),
+    )
 
 
 @router.get("/api/stats/badge")

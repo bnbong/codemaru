@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-11-03
+
+### Fixed
+
+- **An expired card no longer shows a broken image in a README.** On a cache
+  miss the card was rebuilt live before responding, which took up to ~7.6s on a
+  cold start; GitHub's image proxy (Camo) gives up at roughly 4s and showed a
+  broken image until the next refresh. `/api/card.svg` and `/api/summary.json`
+  now serve stale-first: when a last-good summary is retained they answer with
+  it immediately (`stale: true`, so the 60s TTLs apply) and rebuild in the
+  response's background task, after the body is sent; the fresh result then
+  replaces it in the cache. Only a profile requested for the first time is
+  still built synchronously. Concurrent misses on one instance share a single
+  refresh. The post-build last-good and cache writes now run concurrently, so
+  the synchronous worst case stays at 9s with the extra last-good read.
+
 ## [1.4.0] - 2026-09-15
 
 ### Changed
@@ -390,6 +406,7 @@ self-contained, embeddable SVG summary card for GitHub profile READMEs.
   CONTRIBUTING guide, issue/PR templates, CI (ruff, mypy, pytest + coverage),
   release-drafter, and PR labeler.
 
+[1.4.1]: https://github.com/bnbong/codemaru/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/bnbong/codemaru/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/bnbong/codemaru/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/bnbong/codemaru/compare/v1.2.0...v1.2.1

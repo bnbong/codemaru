@@ -217,7 +217,7 @@ def test_card_svg_unexpected_error_returns_error_card_not_500(
     async def boom(profile: object) -> object:
         raise RuntimeError("something internal exploded")
 
-    monkeypatch.setattr("codemaru.web.routes.get_summary", boom)
+    monkeypatch.setattr("codemaru.web.routes.get_summary_stale_first", boom)
     res = client.get("/api/card.svg", params={"github": "octocat"})
     assert res.status_code == 200
     assert res.headers["x-codemaru-error"] == "true"
@@ -232,7 +232,7 @@ def test_card_svg_unexpected_error_keeps_compact(
     async def boom(profile: object) -> object:
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("codemaru.web.routes.get_summary", boom)
+    monkeypatch.setattr("codemaru.web.routes.get_summary_stale_first", boom)
     res = client.get("/api/card.svg", params={"github": "octocat", "compact": "true"})
     assert 'viewBox="0 0 250 270"' in res.text
 
@@ -270,7 +270,7 @@ def test_summary_json_does_not_swallow_unexpected_errors(
     async def boom(profile: object) -> object:
         raise RuntimeError("something internal exploded")
 
-    monkeypatch.setattr("codemaru.web.routes.get_summary", boom)
+    monkeypatch.setattr("codemaru.web.routes.get_summary_stale_first", boom)
     with pytest.raises(RuntimeError):
         client.get("/api/summary.json", params={"github": "octocat"})
 

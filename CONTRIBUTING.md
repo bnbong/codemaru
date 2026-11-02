@@ -35,13 +35,15 @@ The CLI takes the same names as flags: `codemaru generate --github <user> [--boj
 
 Set `FIXTURE_MODE=false` for **live mode**: GitHub, solved.ac, LeetCode, and JungOl are fetched concurrently with a per-request timeout (`ADAPTER_TIMEOUT_SECONDS`).
 
-One whole card build is bounded separately by `CARD_BUILD_TIMEOUT_SECONDS` (default 6). It covers the fetch phase only — the request also makes a KV cache read before it and a stale read/write plus the cache write after, each bounded by `KV_TIMEOUT_SECONDS` — so the sum (`KV_TIMEOUT_SECONDS + CARD_BUILD_TIMEOUT_SECONDS + 2 * KV_TIMEOUT_SECONDS`, 9s at the defaults) has to stay below your platform's function timeout (Vercel's default is 10s) with room for scoring and rendering, or the budget never fires. On expiry the platforms that finished are kept and the rest become `unavailable` with a `timed out (card build budget)` note, so the card still renders as `partial`; GitHub stops requesting repository pages cooperatively before the deadline rather than losing the pages it already fetched.
+One whole card build is bounded separately by `CARD_BUILD_TIMEOUT_SECONDS` (default 6). It covers the fetch phase only — a synchronous build also makes the KV cache read and the last-good (stale) read before it and the concurrent last-good + cache writes after, each bounded by `KV_TIMEOUT_SECONDS` — so the sum (`2 * KV_TIMEOUT_SECONDS + CARD_BUILD_TIMEOUT_SECONDS + KV_TIMEOUT_SECONDS`, 9s at the defaults) has to stay below your platform's function timeout (Vercel's default is 10s) with room for scoring and rendering, or the budget never fires. On expiry the platforms that finished are kept and the rest become `unavailable` with a `timed out (card build budget)` note, so the card still renders as `partial`; GitHub stops requesting repository pages cooperatively before the deadline rather than losing the pages it already fetched.
 
 Live GitHub data requires `GITHUB_TOKEN` (the GraphQL API needs auth); without it the GitHub snapshot is `unavailable`.
 
 Each adapter maps any failure (HTTP error, timeout, schema drift, blocked request) to an `unavailable` snapshot, so one platform failing degrades the card to `partial` instead of breaking it.
 
 A computed summary is cached (`CACHE_TTL_SECONDS`) — a degraded or stale one only for `NEGATIVE_CACHE_TTL_SECONDS` (60), and a GitHub handle that doesn't exist for `NOT_FOUND_CACHE_TTL_SECONDS` (600). When Vercel KV (`KV_REST_API_URL` / `KV_REST_API_TOKEN`) is configured the cache is shared across instances, otherwise it falls back to per-instance memory. Either way it's best-effort — a KV outage never affects rendering.
+
+On a cache miss, `/api/card.svg` and `/api/summary.json` serve **stale-first**: if a last-good summary is retained (`STALE_TTL_SECONDS`, default one day), it is returned immediately with `stale: true` (so it gets the 60s TTLs above) and the live rebuild runs in the response's background task, after the body is sent; the rebuild then overwrites the cache with the fresh result. GitHub's image proxy gives up after roughly 4 seconds, so waiting on a live build used to show a broken image on the first view of an expired card. Only a profile with no last-good copy (its first request ever) is built synchronously. Concurrent misses on one instance start a single refresh, and the refresh first re-caches the stale copy so other instances get a short-lived hit instead of starting their own. The CLI's `get_summary` always builds synchronously.
 
 > **Note:** solved.ac sits behind Cloudflare, which rejects plain-Python TLS
 > fingerprints (a 403 "Just a moment…" challenge). codemaru fetches it with a
@@ -54,7 +56,7 @@ A computed summary is cached (`CACHE_TTL_SECONDS`) — a degraded or stale one o
 
 ## Logging
 
-`codemaru/telemetry.py` writes one JSON object per line to stdout — on a serverless host that stream is the whole observability surface. Events: `adapter` (one per adapter return), `build` (one per live build, with per-platform statuses), `cache` (hit / miss / rebuild plus the chosen TTL), `kv_error`, and `card_error` (an unexpected failure on `/api/card.svg`, with a traceback).
+`codemaru/telemetry.py` writes one JSON object per line to stdout — on a serverless host that stream is the whole observability surface. Events: `adapter` (one per adapter return), `build` (one per live build, with per-platform statuses), `cache` (hit / miss / rebuild / stale_first / refresh plus the chosen TTL), `refresh` (a finished background rebuild), `refresh_error` (a background rebuild that raised, with a traceback), `kv_error`, and `card_error` (an unexpected failure on `/api/card.svg`, with a traceback).
 
 Only public handles are logged — never request headers, viewer IPs or tokens — and a caught exception contributes its class name, not its message, which can carry a credentialed KV URL — the one deliberate exception is the card route's catch-all, which logs a full traceback because that branch is the only place an unexpected bug surfaces. `configure_logging()` only skips attaching its stdout handler when the root logger already has one (uvicorn, pytest, an embedding process), so it never duplicates someone else's lines; the level is always set, or every event would be dropped on exactly those hosts.
 
@@ -127,13 +129,15 @@ CLI도 같은 이름을 플래그로 받습니다: `codemaru generate --github <
 
 **Live 모드**는 `FIXTURE_MODE=false`로 켭니다. GitHub, solved.ac, LeetCode, 정올(JungOl)을 요청별 타임아웃(`ADAPTER_TIMEOUT_SECONDS`)으로 동시에 가져옵니다.
 
-카드 빌드 한 번 전체는 `CARD_BUILD_TIMEOUT_SECONDS`(기본 6)로 따로 제한합니다. 이 예산은 fetch 단계만 덮습니다. 요청은 그 앞뒤로 KV 캐시 읽기 한 번, stale 읽기/쓰기와 캐시 쓰기를 더 하고 각각 `KV_TIMEOUT_SECONDS`로 제한되므로, 합계(`KV_TIMEOUT_SECONDS + CARD_BUILD_TIMEOUT_SECONDS + 2 * KV_TIMEOUT_SECONDS`, 기본값이면 9초)가 플랫폼의 함수 타임아웃(Vercel 기본 10초)보다 점수 계산·렌더링 여유를 두고 낮아야 합니다. 그렇지 않으면 예산이 아예 발동하지 않습니다. 시간이 다 되면 이미 끝난 플랫폼은 그대로 두고 나머지는 `timed out (card build budget)` 노트와 함께 `unavailable`이 되므로, 카드는 `partial`로라도 렌더됩니다. GitHub은 데드라인 전에 스스로 저장소 페이지 요청을 멈춰서, 이미 받아 둔 페이지까지 잃지는 않습니다.
+카드 빌드 한 번 전체는 `CARD_BUILD_TIMEOUT_SECONDS`(기본 6)로 따로 제한합니다. 이 예산은 fetch 단계만 덮습니다. 동기 빌드는 그 앞에서 KV 캐시와 마지막 정상값(stale)을 한 번씩 읽고, 뒤에서 마지막 정상값과 캐시를 동시에 씁니다. 각 호출은 `KV_TIMEOUT_SECONDS`로 제한되므로, 합계(`2 * KV_TIMEOUT_SECONDS + CARD_BUILD_TIMEOUT_SECONDS + KV_TIMEOUT_SECONDS`, 기본값이면 9초)가 플랫폼의 함수 타임아웃(Vercel 기본 10초)보다 점수 계산·렌더링 여유를 두고 낮아야 합니다. 그렇지 않으면 예산이 아예 발동하지 않습니다. 시간이 다 되면 이미 끝난 플랫폼은 그대로 두고 나머지는 `timed out (card build budget)` 노트와 함께 `unavailable`이 되므로, 카드는 `partial`로라도 렌더됩니다. GitHub은 데드라인 전에 스스로 저장소 페이지 요청을 멈춰서, 이미 받아 둔 페이지까지 잃지는 않습니다.
 
 라이브 GitHub 데이터에는 `GITHUB_TOKEN`이 필요합니다(GraphQL API는 인증이 필수입니다). 토큰이 없으면 GitHub 스냅샷은 `unavailable`이 됩니다.
 
 각 어댑터는 모든 실패(HTTP 오류, 타임아웃, 스키마 변경, 차단된 요청)를 `unavailable` 스냅샷으로 처리합니다. 그래서 한 플랫폼이 실패해도 카드가 깨지지 않고 `partial`로 degrade됩니다.
 
 계산된 요약은 캐시됩니다(`CACHE_TTL_SECONDS`). degrade됐거나 stale인 결과는 `NEGATIVE_CACHE_TTL_SECONDS`(60)만, 존재하지 않는 GitHub 핸들은 `NOT_FOUND_CACHE_TTL_SECONDS`(600)만 캐시합니다. Vercel KV(`KV_REST_API_URL` / `KV_REST_API_TOKEN`)가 설정돼 있으면 캐시를 인스턴스 간에 공유하고, 없으면 인스턴스 로컬 메모리로 폴백합니다. 어느 쪽이든 best-effort라 KV가 장애를 일으켜도 렌더링에는 영향이 없습니다.
+
+캐시에 요약이 없으면 `/api/card.svg`와 `/api/summary.json`은 **stale-first**로 응답합니다. 마지막 정상값이 보관돼 있다면(`STALE_TTL_SECONDS`, 기본 하루) 그 값을 `stale: true`로 표시해 곧바로 반환하므로, 이 응답에는 위에서 설명한 60초 TTL이 적용됩니다. 라이브 재빌드는 본문을 보낸 뒤 응답의 백그라운드 작업에서 실행되고, 끝나면 새 결과로 캐시를 덮어씁니다. GitHub 이미지 프록시는 약 4초가 지나면 요청을 포기하기 때문에, 예전에는 라이브 빌드를 기다리는 동안 만료된 카드를 처음 열면 이미지가 깨져 보였습니다. 마지막 정상값이 없는 프로필(처음 요청된 프로필)만 동기로 빌드합니다. 한 인스턴스에서 같은 프로필의 요청이 동시에 캐시를 놓쳐도 재빌드는 한 번만 시작됩니다. 또한 재빌드는 시작하면서 stale 사본을 캐시에 먼저 기록하므로, 다른 인스턴스는 자체 재빌드를 시작하지 않고 짧은 TTL로 캐시된 사본을 읽습니다. CLI가 쓰는 `get_summary`는 항상 동기로 빌드합니다.
 
 > **참고:** solved.ac는 Cloudflare 뒤에 있어 순수 파이썬 TLS 지문을 거부합니다
 > (403 "Just a moment…" 챌린지). codemaru는 브라우저를 모방하는 TLS 클라이언트
@@ -145,7 +149,7 @@ CLI도 같은 이름을 플래그로 받습니다: `codemaru generate --github <
 
 ## 로깅
 
-`codemaru/telemetry.py`는 stdout에 JSON 객체를 한 줄에 하나씩 씁니다. 서버리스 환경에서는 이 스트림이 사실상 유일한 관측 수단입니다. 이벤트는 `adapter`(어댑터가 반환할 때마다), `build`(라이브 빌드 1회, 플랫폼별 상태 포함), `cache`(hit / miss / rebuild와 선택된 TTL), `kv_error`, `card_error`(`/api/card.svg`에서 난 예상 못 한 실패, 트레이스백 포함)입니다.
+`codemaru/telemetry.py`는 stdout에 JSON 객체를 한 줄에 하나씩 씁니다. 서버리스 환경에서는 이 스트림이 사실상 유일한 관측 수단입니다. 이벤트는 `adapter`(어댑터가 반환할 때마다), `build`(라이브 빌드 1회, 플랫폼별 상태 포함), `cache`(hit / miss / rebuild / stale_first / refresh와 선택된 TTL), `refresh`(백그라운드 재빌드 완료), `refresh_error`(백그라운드 재빌드에서 난 예외, 트레이스백 포함), `kv_error`, `card_error`(`/api/card.svg`에서 난 예상 못 한 실패, 트레이스백 포함)입니다.
 
 로그에는 공개 핸들만 남깁니다. 요청 헤더, 조회자 IP, 토큰은 기록하지 않고, 잡은 예외는 메시지가 아니라 클래스 이름만 남깁니다(메시지에는 인증 정보가 붙은 KV URL이 들어갈 수 있습니다). 딱 하나 의도적인 예외가 카드 라우트의 catch-all입니다. 예상 못 한 버그가 드러나는 유일한 지점이라 트레이스백을 통째로 남깁니다. `configure_logging()`은 루트 로거에 이미 핸들러가 있으면(uvicorn, pytest, 임베딩한 프로세스) stdout 핸들러만 붙이지 않아서 남이 설정한 로그를 중복 출력하지 않습니다. 레벨은 항상 설정합니다. 그러지 않으면 바로 그런 호스트에서 모든 이벤트가 조용히 사라집니다.
 

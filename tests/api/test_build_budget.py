@@ -35,16 +35,17 @@ _FUNCTION_LIMIT = 10.0
 
 
 def test_the_default_budget_leaves_room_for_the_kv_round_trips_around_it():
-    # The budget bounds the FETCH phase only. get_summary brackets it with KV
-    # calls — a cache read before, then a stale read/write plus the cache write
-    # after — each bounded by kv_timeout_seconds, and a function the platform
-    # kills writes no negative cache entry at all (the very thing the budget
-    # exists to guarantee). So the sum, not the budget alone, has to fit.
+    # The budget bounds the FETCH phase only. A synchronous build is bracketed
+    # by KV calls — the cache read and (stale-first path) the last-good read
+    # before, then the concurrent last-good + cache writes after — each bounded
+    # by kv_timeout_seconds, and a function the platform kills writes no
+    # negative cache entry at all (the very thing the budget exists to
+    # guarantee). So the sum, not the budget alone, has to fit.
     from codemaru.settings import get_settings
 
     settings = get_settings()
     kv = settings.kv_timeout_seconds
-    worst_case = kv + settings.card_build_timeout_seconds + 2 * kv
+    worst_case = 2 * kv + settings.card_build_timeout_seconds + kv
     assert worst_case <= _FUNCTION_LIMIT
     # Pinned so lifting the budget back to a value that doesn't fit is deliberate.
     assert settings.card_build_timeout_seconds == 6.0

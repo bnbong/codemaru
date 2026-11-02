@@ -45,15 +45,22 @@ class Settings(BaseSettings):
     # entry. On expiry the finished platforms are kept and the rest degrade to
     # `unavailable`, so the card still renders (as partial).
     #
-    # This bounds the *fetch phase only*. get_summary brackets it with KV calls —
-    # one cache read before, then a stale read/write and the cache write after —
-    # each bounded by kv_timeout_seconds, so the request's worst case is
+    # This bounds the *fetch phase only*. A synchronous build is bracketed by KV
+    # calls, each bounded by kv_timeout_seconds: before it, the cache read plus
+    # (stale-first path) the last-good read; after it, the last-good and cache
+    # writes, which run concurrently (a degraded build that hasn't read the
+    # last-good store yet does that read then the cache write — still two
+    # before + one after, or one before + two after). The worst case is
     #
-    #     kv_timeout_seconds + card_build_timeout_seconds + 2 * kv_timeout_seconds
+    #     2 * kv_timeout_seconds + card_build_timeout_seconds + kv_timeout_seconds
     #
     # and THAT sum must stay under the platform's function timeout (Vercel's
     # default is 10s), with room left for scoring, rendering and the response.
-    # At the defaults: 1 + 6 + 2 = 9s. Raise this only by lowering something else.
+    # At the defaults: 2 + 6 + 1 = 9s. Raise this only by lowering something else.
+    #
+    # A stale-first response (last-good copy served, rebuild in the background)
+    # costs only the two reads before responding; the background rebuild adds
+    # one more KV write up front and then runs this same budget.
     card_build_timeout_seconds: float = 6.0
 
     # Vercel deployment environment (production / preview / development), injected

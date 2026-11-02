@@ -13,7 +13,7 @@ from codemaru.models.input import ProfileInput
 
 
 class _FakeKV:
-    """An in-process stand-in for the Upstash REST endpoint (GET/SET + EX)."""
+    """An in-process stand-in for the Upstash REST endpoint (GET/SET + EX [NX])."""
 
     def __init__(self) -> None:
         self.store: dict[str, str] = {}
@@ -24,7 +24,9 @@ class _FakeKV:
         op = args[0].upper()
         if op == "GET":
             return self.store.get(args[1])
-        if op == "SET":  # SET key value EX ttl
+        if op == "SET":  # SET key value EX ttl [NX]
+            if "NX" in (a.upper() for a in args[3:]) and args[1] in self.store:
+                return None  # Upstash answers null when NX finds the key taken
             self.store[args[1]] = args[2]
             return "OK"
         return None

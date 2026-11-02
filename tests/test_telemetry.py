@@ -413,7 +413,7 @@ def test_card_route_catch_all_logs_the_handle_with_a_traceback(
     async def boom(profile: object) -> object:
         raise RuntimeError("something internal exploded")
 
-    monkeypatch.setattr("codemaru.web.routes.get_summary", boom)
+    monkeypatch.setattr("codemaru.web.routes.get_summary_stale_first", boom)
     capture.set_level(logging.ERROR, logger="codemaru")
 
     res = client.get("/api/card.svg", params={"github": "octocat"})
